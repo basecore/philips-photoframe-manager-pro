@@ -1,6 +1,6 @@
 # Philips PhotoFrame Manager Pro
 
-A cross-platform desktop utility for managing *Philips Digital PhotoFrames* on Linux and Windows. It provides an album browser, image editor, RSS feed manager, and full-device backup/restore, all wrapped in a modern CustomTkinter GUI.
+A cross-platform desktop utility for managing *Philips Digital PhotoFrames* on Linux and Windows. It provides an album browser, image editor, RSS feed manager, and full-device backup/restore, all wrapped in a modern **Qt (PySide6)** GUI.
 
 ## Features
 
@@ -19,7 +19,17 @@ A cross-platform desktop utility for managing *Philips Digital PhotoFrames* on L
   - Brightness slider (0–255)
   - 24h clock, language, format (Original/RadiantColor/Scale to fit)
   - Slideshow timing, sequence (ordered/shuffle), transition effect, calendar mode
-  - Auto on/off (sensor & time-based) and other device flags
+  - Auto on/off with **three modes**:
+    - Off (disabled)
+    - Time (schedule)
+    - Light + time (light sensor + schedule)
+  - Light sensor thresholds with validation:
+    - `Light sensor ON (max)` and `Light sensor OFF (min)` sliders (0–10)
+    - The app prevents saving when `ON (max)` is lower than or equal to `OFF (min)`
+  - Time-based power schedule:
+    - `Power on time` and `Power off time` (HH:MM)
+    - These fields are automatically enabled/disabled based on the selected Auto on/off mode
+  - Auto tilt/orientation, background color, delete protection, beep sound, demo mode
 - **RSS feed manager**
   - Load existing `.config/rss.cfg`
   - Add/edit/delete RSS feeds and groups
@@ -29,15 +39,25 @@ A cross-platform desktop utility for managing *Philips Digital PhotoFrames* on L
   - Create a ZIP backup of the complete device content
   - Restore from existing ZIP archive
 
+## GUI overview
+
+> **Screenshot 1 placeholder** – Main window showing sidebar, album browser and thumbnails.
+>
+> Replace this line with something like:
+> `![Main window](docs/screenshot-main.png)`
+
+> **Screenshot 2 placeholder** – Prefs tab showing Auto on/off, light sensor sliders and power on/off time fields.
+>
+> Replace this line with something like:
+> `![Prefs tab](docs/screenshot-prefs.png)`
+
 ## Requirements
 
 - Python 3.8+
 - The script auto-installs these dependencies if missing:
-  - `customtkinter`
   - `psutil`
   - `Pillow`
-  - `tkinterdnd2-universal`
-- On Debian-like Linux, it optionally installs `python3-pil.imagetk` via `apt` for better Tk image support.
+  - `PySide6`
 
 ## Installation
 
@@ -70,8 +90,14 @@ sudo python3 philips_manager_pro.py
   - `.prefs`
   - `.config/rss.cfg`
   - `ALBUM` or `Album` directory
-- If auto-detection fails, use **"Select device manually"** and choose the mount point (e.g. `/media/USER/PHILIPS` or `E:\` on Windows).
+- If auto-detection fails, use **"Scan device"** or **"Select device manually"** and choose the mount point (e.g. `/media/USER/PHILIPS` or `E:\` on Windows).
 - All operations (copy, delete, rename, backup, restore) are logged to the terminal for debugging.
+
+## Debugging `.prefs` and `rss.cfg`
+
+- Tools tab contains two helpers:
+  - **"Debug: .prefs anzeigen"** – shows you the raw `.prefs` file from the device. If no device is connected, a synthetic in-memory `.prefs` snapshot is shown that matches the real file structure, so you can compare and debug.
+  - **"Debug: rss.cfg anzeigen"** – shows the current RSS configuration file.
 
 ## Disclaimer
 
