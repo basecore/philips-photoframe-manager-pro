@@ -1,6 +1,6 @@
-# Philips PhotoFrame Manager Pro
+# Philips PhotoFrame Manager Pro for 8FF3WMI
 
-A cross-platform desktop utility for managing *Philips Digital PhotoFrames* on Linux and Windows. It provides an album browser, image editor, RSS feed manager, and full-device backup/restore, all wrapped in a modern **Qt (PySide6)** GUI.
+A cross-platform desktop utility for managing *Philips Digital PhotoFrames* on Linux and Windows for the Pphilips PhotoFrame 8FF3WMI. It provides an album browser, image editor, RSS feed manager, and full-device backup/restore, all wrapped in a modern **Qt (PySide6)** GUI.
 
 ## Features
 
