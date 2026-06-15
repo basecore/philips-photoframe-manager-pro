@@ -1,105 +1,103 @@
 #!/usr/bin/env python3
-__version__ = "2.4.0"
-__build_date__ = "2026-06-13"
+__version__ = "3.0.0"
+__build_date__ = "2026-06-15"
 
-import os
+# ─────────────────────────────────────────────────────────────────────────────
+# Auto-install required packages before anything else
+# ─────────────────────────────────────────────────────────────────────────────
 import sys
+import subprocess
+import importlib.util
+import os
+
+REQUIRED = [
+    ("psutil",   "psutil"),
+    ("PIL",      "Pillow"),
+    ("PySide6",  "PySide6"),
+]
+
+def _pip_install(pkg):
+    print(f"Installing missing package: {pkg} …")
+    cmd = [sys.executable, "-m", "pip", "install", "--break-system-packages", pkg]
+    subprocess.check_call(cmd)
+
+for _mod, _pkg in REQUIRED:
+    if importlib.util.find_spec(_mod) is None:
+        _pip_install(_pkg)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Standard / third-party imports
+# ─────────────────────────────────────────────────────────────────────────────
 import re
 import io
 import html
 import shutil
 import logging
-import subprocess
-import importlib.util
 import urllib.request
 import urllib.error
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-REQUIRED = [
-    ("customtkinter", "customtkinter"),
-    ("psutil", "psutil"),
-    ("PIL", "Pillow"),
-    ("tkinterdnd2", "tkinterdnd2-universal"),
-]
+import psutil
+from PIL import Image, ImageOps
 
-IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp"}
-NS_MEDIA = "{http://search.yahoo.com/mrss/}"
+from PySide6.QtCore import (
+    Qt, QTimer, QThread, Signal, QSize, QPoint, QRect,
+)
+from PySide6.QtGui import (
+    QPixmap, QImage, QFont, QColor, QPalette, QIcon,
+    QPainter, QPen, QBrush, QAction,
+)
+from PySide6.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QSplitter,
+    QTabWidget, QScrollArea, QFrame,
+    QVBoxLayout, QHBoxLayout, QGridLayout, QFormLayout,
+    QLabel, QPushButton, QSlider, QComboBox, QLineEdit,
+    QTextEdit, QSizePolicy, QMessageBox, QInputDialog,
+    QFileDialog, QScrollBar, QSpacerItem,
+)
 
-def is_debian_like():
-    try:
-        return os.path.exists("/etc/debian_version") or os.path.exists("/etc/linuxmint-info")
-    except Exception:
-        return False
-
-def pip_install(package):
-    cmd = [sys.executable, "-m", "pip", "install", "--break-system-packages", package]
-    logging.info("pip install: %s", package)
-    subprocess.check_call(cmd)
-
-def apt_install(packages):
-    if not shutil.which("apt-get"):
-        logging.warning("apt-get not available, skipping apt install: %s", packages)
-        return
-    if hasattr(os, "geteuid") and os.geteuid() != 0:
-        cmd = ["sudo", "apt-get", "install", "-y"] + packages
-    else:
-        cmd = ["apt-get", "install", "-y"] + packages
-    logging.info("apt install: %s", " ".join(packages))
-    subprocess.check_call(cmd)
-
-def ensure_modules():
-    for module_name, package_name in REQUIRED:
-        if importlib.util.find_spec(module_name) is None:
-            print(f"Installing missing module: {package_name}...")
-            pip_install(package_name)
-
-    try:
-        from PIL import ImageTk  # noqa: F401
-    except Exception:
-        logging.warning("ImageTk missing, trying system package")
-        if is_debian_like():
-            try:
-                apt_install(["python3-pil.imagetk"])
-            except Exception:
-                logging.exception("apt install python3-pil.imagetk failed")
-        try:
-            from PIL import ImageTk  # noqa: F401
-        except Exception:
-            pip_install("Pillow")
-
+# ─────────────────────────────────────────────────────────────────────────────
+# Logging
+# ─────────────────────────────────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 
-ensure_modules()
+# ─────────────────────────────────────────────────────────────────────────────
+# Constants
+# ─────────────────────────────────────────────────────────────────────────────
+IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp"}
+NS_MEDIA   = "{http://search.yahoo.com/mrss/}"
 
-import customtkinter as ctk
-import psutil
-from PIL import Image, ImageTk, ImageOps
-from tkinter import messagebox, simpledialog, filedialog
-from tkinterdnd2 import TkinterDnD, DND_FILES
+BLUE       = "#0B5ED7"
+BLUE_LIGHT = "#E9EEF8"
+RED        = "#C0392B"
+GREEN      = "#118C4F"
+SIDEBAR_BG = "#FFFFFF"
+CARD_BG    = "#F9FAFC"
+PANEL_BG   = "#F6F7FB"
+WHITE      = "#FFFFFF"
 
-ctk.set_appearance_mode("Light")
-ctk.set_default_color_theme("blue")
-
-def strip_html(text):
+# ─────────────────────────────────────────────────────────────────────────────
+# Helpers
+# ─────────────────────────────────────────────────────────────────────────────
+def strip_html(text: str) -> str:
     if not text:
         return ""
     text = html.unescape(text)
     text = re.sub(r"<[^>]+>", " ", text)
-    text = re.sub(r"\s+", " ", text).strip()
-    return text
+    return re.sub(r"\s+", " ", text).strip()
 
-def parse_image_from_description(desc):
+def parse_image_from_description(desc: str):
     if not desc:
         return None
     m = re.search(r'src=["\']([^"\']+)["\']', desc)
     return m.group(1) if m else None
 
-def fetch_url_bytes(url, timeout=15):
+def fetch_url_bytes(url: str, timeout: int = 15):
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -108,475 +106,742 @@ def fetch_url_bytes(url, timeout=15):
         logging.error("Failed to load URL: %s (%s)", url, e)
         return None
 
-def human_size(num):
+def human_size(num: float) -> str:
     for unit in ["B", "KB", "MB", "GB", "TB"]:
         if num < 1024.0:
             return f"{num:.1f} {unit}"
         num /= 1024.0
     return f"{num:.1f} PB"
 
-def dir_stats(path):
-    files = 0
-    dirs = 0
-    size = 0
+def dir_stats(path: str):
+    files = dirs = size = 0
     for root, subdirs, filenames in os.walk(path):
         dirs += len(subdirs)
         for fn in filenames:
             files += 1
-            fp = os.path.join(root, fn)
             try:
-                size += os.path.getsize(fp)
+                size += os.path.getsize(os.path.join(root, fn))
             except OSError:
                 pass
     return files, dirs, size
 
+def pil_to_qpixmap(img: Image.Image, max_w: int = 0, max_h: int = 0) -> QPixmap:
+    if max_w > 0 or max_h > 0:
+        img = img.copy()
+        img.thumbnail((max_w or 99999, max_h or 99999))
+    if img.mode not in ("RGB", "RGBA"):
+        img = img.convert("RGBA")
+    data = img.tobytes("raw", img.mode)
+    fmt  = QImage.Format.Format_RGBA8888 if img.mode == "RGBA" else QImage.Format.Format_RGB888
+    qi   = QImage(data, img.width, img.height, fmt)
+    return QPixmap.fromImage(qi)
 
-class App(ctk.CTk, TkinterDnD.DnDWrapper):
+def btn(label: str, color: str = "", min_w: int = 0) -> QPushButton:
+    b = QPushButton(label)
+    style = "QPushButton { padding: 6px 14px; border-radius: 6px; font-size: 13px;"
+    if color:
+        style += f" background: {color}; color: white;"
+    else:
+        style += " background: #0B5ED7; color: white;"
+    style += "} QPushButton:hover { opacity: 0.85; filter: brightness(1.1); }"
+    b.setStyleSheet(style)
+    if min_w:
+        b.setMinimumWidth(min_w)
+    return b
+
+def lbl(text: str, bold: bool = False, size: int = 13, color: str = "") -> QLabel:
+    l = QLabel(text)
+    l.setWordWrap(True)
+    style = f"font-size: {size}px;"
+    if bold:
+        style += " font-weight: bold;"
+    if color:
+        style += f" color: {color};"
+    l.setStyleSheet(style)
+    return l
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Drag & Drop drop zone widget (pure Qt, no tkinterdnd2)
+# ─────────────────────────────────────────────────────────────────────────────
+class DropZone(QLabel):
+    """A label that accepts folder/file drops and emits paths_dropped."""
+    paths_dropped = Signal(list)
+
+    def __init__(self, text: str = "Drop album folders here", parent=None):
+        super().__init__(text, parent)
+        self.setAcceptDrops(True)
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._normal_style()
+
+    def _normal_style(self):
+        self.setStyleSheet(
+            f"background: {BLUE_LIGHT}; color: {BLUE}; border: 2px dashed {BLUE};"
+            " border-radius: 10px; font-size: 14px; font-weight: bold; padding: 14px;"
+        )
+
+    def _hover_style(self):
+        self.setStyleSheet(
+            f"background: #C8D9F8; color: {BLUE}; border: 2px solid {BLUE};"
+            " border-radius: 10px; font-size: 14px; font-weight: bold; padding: 14px;"
+        )
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+            self._hover_style()
+        else:
+            event.ignore()
+
+    def dragLeaveEvent(self, event):
+        self._normal_style()
+
+    def dropEvent(self, event):
+        self._normal_style()
+        paths = [u.toLocalFile() for u in event.mimeData().urls()]
+        self.paths_dropped.emit(paths)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Image card widget for album view
+# ─────────────────────────────────────────────────────────────────────────────
+class ImageCard(QFrame):
+    edit_requested   = Signal(str)
+    rename_requested = Signal(str)
+    delete_requested = Signal(str)
+
+    def __init__(self, path: str, filename: str, thumb_size: int, parent=None):
+        super().__init__(parent)
+        self.path = path
+        self.setStyleSheet(f"background: {CARD_BG}; border-radius: 12px;")
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+
+        v = QVBoxLayout(self)
+        v.setContentsMargins(10, 10, 10, 10)
+        v.setSpacing(6)
+
+        img_lbl = QLabel()
+        img_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        img_lbl.setFixedSize(thumb_size, thumb_size)
+        try:
+            img = Image.open(path)
+            img = ImageOps.exif_transpose(img)
+            px  = pil_to_qpixmap(img, thumb_size, thumb_size)
+            img_lbl.setPixmap(px)
+        except Exception:
+            img_lbl.setText("Error")
+        v.addWidget(img_lbl)
+
+        name_lbl = QLabel(filename)
+        name_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        name_lbl.setWordWrap(True)
+        name_lbl.setStyleSheet("font-size: 11px;")
+        name_lbl.setMaximumWidth(thumb_size + 20)
+        v.addWidget(name_lbl)
+
+        btns_row = QHBoxLayout()
+        btns_row.setSpacing(4)
+        b_edit   = btn("Edit", min_w=60)
+        b_rename = btn("✎", min_w=30)
+        b_del    = btn("🗑", RED, min_w=30)
+        b_edit.clicked.connect(lambda: self.edit_requested.emit(self.path))
+        b_rename.clicked.connect(lambda: self.rename_requested.emit(self.path))
+        b_del.clicked.connect(lambda: self.delete_requested.emit(self.path))
+        btns_row.addWidget(b_edit)
+        btns_row.addWidget(b_rename)
+        btns_row.addWidget(b_del)
+        v.addLayout(btns_row)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Editor canvas (with crop support via mouse clicks)
+# ─────────────────────────────────────────────────────────────────────────────
+class EditorCanvas(QLabel):
+    crop_point_picked = Signal(int, int)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        self.setStyleSheet("background: #F7F8FB;")
+        self.crop_mode = False
+        self._pixmap_orig: QPixmap | None = None
+        self._img_size = (1, 1)
+
+    def set_image(self, pil_img: Image.Image):
+        self._img_size = pil_img.size
+        px = pil_to_qpixmap(pil_img, 1100, 700)
+        self._pixmap_orig = px
+        self.setPixmap(px)
+        self.setFixedSize(px.width() + 20, px.height() + 20)
+
+    def clear(self):
+        self._pixmap_orig = None
+        self.clear()
+        self.setStyleSheet("background: #F7F8FB;")
+
+    def mousePressEvent(self, event):
+        if not self.crop_mode or self._pixmap_orig is None:
+            return
+        if event.button() == Qt.MouseButton.LeftButton:
+            px = self._pixmap_orig.width()
+            py = self._pixmap_orig.height()
+            rx = int(event.position().x() * self._img_size[0] / px)
+            ry = int(event.position().y() * self._img_size[1] / py)
+            self.crop_point_picked.emit(rx, ry)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Background thread for RSS feed loading
+# ─────────────────────────────────────────────────────────────────────────────
+class RssFetchThread(QThread):
+    done = Signal(bytes)
+    error = Signal(str)
+
+    def __init__(self, url: str):
+        super().__init__()
+        self.url = url
+
+    def run(self):
+        data = fetch_url_bytes(self.url)
+        if data:
+            self.done.emit(data)
+        else:
+            self.error.emit(f"Could not load: {self.url}")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Main window
+# ─────────────────────────────────────────────────────────────────────────────
+class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.TkdndVersion = TkinterDnD._require(self)
-        self.title(f"Philips PhotoFrame Manager Pro v{__version__}")
-        self.geometry("1440x900")
-        self.minsize(1240, 800)
+        self.setWindowTitle(f"Philips PhotoFrame Manager Pro v{__version__}")
+        self.resize(1440, 900)
+        self.setMinimumSize(1100, 700)
 
-        self.device_root = None
-        self.current_album_path = None
-        self.current_album_name = None
-        self.current_rss_feed = None
+        # State
+        self.device_root: str | None  = None
+        self.current_album_path: str | None = None
+        self.current_album_name: str | None = None
         self.thumbnail_size = 140
         self.album_page = 0
         self.album_page_size = 24
-        self.album_items_current = []
-        self._tk_refs = []
-        self.rss_feeds = []
-        self.rss_selected_index = None
+        self.album_items_current: list = []
+        self.rss_feeds: list  = []
+        self.rss_selected_index: int | None = None
+        self.current_rss_feed = None
 
-        self.editor_original = None
-        self.editor_work = None
-        self.editor_photo = None
-        self.editor_image_id = None
-        self.current_edit_path = None
-        self.crop_mode = False
-        self.crop_points = []
+        # Editor state
+        self.editor_original: Image.Image | None = None
+        self.editor_work: Image.Image | None     = None
+        self.current_edit_path: str | None       = None
+        self.crop_points: list = []
 
-        self.album_loading_label = None
-        self.page_size_var = None
+        # prefs widgets dict (key -> QWidget)
+        self.prefs_widgets: dict = {}
+        self.brightness_slider: QSlider | None    = None
+        self.brightness_val_lbl: QLabel | None    = None
+
+        self._rss_thread: RssFetchThread | None = None
 
         self._build_ui()
+        self._apply_global_style()
+
         logging.info("Starting Philips PhotoFrame Manager Pro v%s (%s)", __version__, __build_date__)
-        self.after(1200, self.auto_detect_loop)
 
+        self._auto_timer = QTimer(self)
+        self._auto_timer.timeout.connect(self._auto_detect_tick)
+        self._auto_timer.start(3000)
+        QTimer.singleShot(1200, self._auto_detect_tick)
+
+    # ─── Global stylesheet ────────────────────────────────────────────────────
+    def _apply_global_style(self):
+        self.setStyleSheet("""
+            QMainWindow, QWidget { background: #F4F6FB; font-family: 'Segoe UI', Arial, sans-serif; }
+            QTabWidget::pane { border: none; background: #F4F6FB; }
+            QTabBar::tab {
+                background: #E2E8F4; color: #333; padding: 8px 22px;
+                border-radius: 6px 6px 0 0; margin-right: 2px; font-size: 13px;
+            }
+            QTabBar::tab:selected { background: #0B5ED7; color: white; font-weight: bold; }
+            QScrollArea { border: none; }
+            QLineEdit, QComboBox, QTextEdit {
+                background: white; border: 1px solid #C8D3E8;
+                border-radius: 6px; padding: 4px 8px; font-size: 13px;
+            }
+            QSlider::groove:horizontal { height: 6px; background: #C8D3E8; border-radius: 3px; }
+            QSlider::handle:horizontal {
+                background: #0B5ED7; width: 16px; height: 16px;
+                border-radius: 8px; margin: -5px 0;
+            }
+            QSlider::sub-page:horizontal { background: #0B5ED7; border-radius: 3px; }
+        """)
+
+    # ─── Build UI ─────────────────────────────────────────────────────────────
     def _build_ui(self):
-        self.grid_columnconfigure(1, weight=1)
-        self.grid_rowconfigure(0, weight=1)
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter.setHandleWidth(1)
 
-        self.sidebar = ctk.CTkFrame(self, corner_radius=0, fg_color="#FFFFFF", width=290)
-        self.sidebar.grid(row=0, column=0, sticky="nsew")
-        self.sidebar.grid_rowconfigure(16, weight=1)
+        sidebar = self._build_sidebar()
+        sidebar.setFixedWidth(290)
+        splitter.addWidget(sidebar)
 
-        ctk.CTkLabel(self.sidebar, text="PHILIPS", text_color="#0B5ED7",
-                     font=ctk.CTkFont(size=34, weight="bold")).grid(row=0, column=0, padx=20, pady=(22, 2), sticky="w")
-        ctk.CTkLabel(self.sidebar, text="PhotoFrame Manager Pro", text_color="#3C3C3C",
-                     font=ctk.CTkFont(size=14)).grid(row=1, column=0, padx=20, pady=(0, 6), sticky="w")
-        ctk.CTkLabel(self.sidebar, text=f"Version {__version__} · Build {__build_date__}",
-                     text_color="#777777").grid(row=2, column=0, padx=20, pady=(0, 10), sticky="w")
+        self.tabs = QTabWidget()
+        self.tabs.addTab(self._build_albums_tab(),  "Albums")
+        self.tabs.addTab(self._build_editor_tab(),  "Editor")
+        self.tabs.addTab(self._build_prefs_tab(),   "Prefs")
+        self.tabs.addTab(self._build_rss_tab(),     "RSS")
+        self.tabs.addTab(self._build_tools_tab(),   "Tools")
+        splitter.addWidget(self.tabs)
 
-        self.status = ctk.CTkLabel(self.sidebar, text="No device connected", text_color="#777777")
-        self.status.grid(row=3, column=0, padx=20, pady=(0, 10), sticky="w")
+        splitter.setStretchFactor(0, 0)
+        splitter.setStretchFactor(1, 1)
 
-        self.path_label = ctk.CTkLabel(self.sidebar, text="Path: -", wraplength=250,
-                                       justify="left", text_color="#555555")
-        self.path_label.grid(row=4, column=0, padx=20, pady=(0, 10), sticky="w")
+        self.setCentralWidget(splitter)
 
-        self.storage_label = ctk.CTkLabel(self.sidebar, text="Storage: -", wraplength=250,
-                                          justify="left", text_color="#555555")
-        self.storage_label.grid(row=5, column=0, padx=20, pady=(0, 10), sticky="w")
+    # ─── Sidebar ──────────────────────────────────────────────────────────────
+    def _build_sidebar(self) -> QWidget:
+        w = QWidget()
+        w.setStyleSheet(f"background: {SIDEBAR_BG};")
+        v = QVBoxLayout(w)
+        v.setContentsMargins(20, 22, 20, 20)
+        v.setSpacing(6)
 
-        self.album_info_label = ctk.CTkLabel(self.sidebar, text="Albums: -", wraplength=250,
-                                             justify="left", text_color="#555555")
-        self.album_info_label.grid(row=6, column=0, padx=20, pady=(0, 10), sticky="w")
+        title = QLabel("PHILIPS")
+        title.setStyleSheet(f"color: {BLUE}; font-size: 32px; font-weight: bold;")
+        v.addWidget(title)
+        v.addWidget(lbl("PhotoFrame Manager Pro", size=14, color="#3C3C3C"))
+        v.addWidget(lbl(f"Version {__version__} · Build {__build_date__}", size=11, color="#777"))
 
-        ctk.CTkButton(self.sidebar, text="Scan device", command=self.scan_device)\
-            .grid(row=7, column=0, padx=20, pady=4, sticky="ew")
-        ctk.CTkButton(self.sidebar, text="Select device manually", command=self.manual_select_device)\
-            .grid(row=8, column=0, padx=20, pady=4, sticky="ew")
-        ctk.CTkButton(self.sidebar, text="Refresh", command=self.refresh_all)\
-            .grid(row=9, column=0, padx=20, pady=4, sticky="ew")
-        ctk.CTkButton(self.sidebar, text="Reload RSS", command=self.load_rss_sources)\
-            .grid(row=10, column=0, padx=20, pady=4, sticky="ew")
+        v.addSpacing(8)
+        self.status_lbl = lbl("No device connected", color="#777")
+        v.addWidget(self.status_lbl)
+        self.path_lbl   = lbl("Path: -",    color="#555")
+        self.storage_lbl = lbl("Storage: -", color="#555")
+        self.album_info_lbl = lbl("Albums: -", color="#555")
+        v.addWidget(self.path_lbl)
+        v.addWidget(self.storage_lbl)
+        v.addWidget(self.album_info_lbl)
 
-        ctk.CTkLabel(self.sidebar, text=f"Thumbnail: {self.thumbnail_size}px")\
-            .grid(row=11, column=0, padx=20, pady=(8, 0), sticky="w")
-        self.thumb_slider = ctk.CTkSlider(self.sidebar, from_=80, to=240, number_of_steps=16,
-                                          command=self._thumb_changed)
-        self.thumb_slider.set(self.thumbnail_size)
-        self.thumb_slider.grid(row=12, column=0, padx=20, pady=(0, 6), sticky="ew")
+        v.addSpacing(10)
+        for label, slot in [
+            ("Scan device",          self.scan_device),
+            ("Select device manually", self.manual_select_device),
+            ("Refresh",              self.refresh_all),
+            ("Reload RSS",           self.load_rss_sources),
+        ]:
+            b = btn(label)
+            b.clicked.connect(slot)
+            v.addWidget(b)
 
-        ctk.CTkLabel(self.sidebar, text="Images per page:").grid(row=13, column=0, padx=20, pady=(4, 0), sticky="w")
-        self.page_size_var = ctk.StringVar(value=str(self.album_page_size))
-        self.page_size_menu = ctk.CTkOptionMenu(
-            self.sidebar,
-            variable=self.page_size_var,
-            values=["12", "24", "48", "96"],
-            command=self._page_size_changed
-        )
-        self.page_size_menu.grid(row=14, column=0, padx=20, pady=(0, 8), sticky="ew")
+        v.addSpacing(10)
+        self.thumb_lbl = lbl(f"Thumbnail: {self.thumbnail_size}px")
+        v.addWidget(self.thumb_lbl)
+        self.thumb_slider = QSlider(Qt.Orientation.Horizontal)
+        self.thumb_slider.setMinimum(80)
+        self.thumb_slider.setMaximum(240)
+        self.thumb_slider.setValue(self.thumbnail_size)
+        self.thumb_slider.valueChanged.connect(self._thumb_changed)
+        v.addWidget(self.thumb_slider)
 
-        ctk.CTkLabel(self.sidebar, text="All actions are logged to the terminal.",
-                     wraplength=250, text_color="#666666").grid(row=15, column=0, padx=20, pady=(6, 0), sticky="w")
+        v.addSpacing(6)
+        v.addWidget(lbl("Images per page:"))
+        self.page_size_combo = QComboBox()
+        self.page_size_combo.addItems(["12", "24", "48", "96"])
+        self.page_size_combo.setCurrentText("24")
+        self.page_size_combo.currentTextChanged.connect(self._page_size_changed)
+        v.addWidget(self.page_size_combo)
 
-        self.tabs = ctk.CTkTabview(self)
-        self.tabs.grid(row=0, column=1, padx=18, pady=18, sticky="nsew")
-        self.tabs.add("Albums")
-        self.tabs.add("Editor")
-        self.tabs.add("Prefs")
-        self.tabs.add("RSS")
-        self.tabs.add("Tools")
+        v.addStretch()
+        v.addWidget(lbl("All actions are logged to the terminal.", size=11, color="#666"))
+        return w
 
-        self._build_albums_tab()
-        self._build_editor_tab()
-        self._build_prefs_tab()
-        self._build_rss_tab()
-        self._build_tools_tab()
-
-    def _thumb_changed(self, value):
-        self.thumbnail_size = int(float(value))
-        if self.album_loading_label:
-            self.album_loading_label.configure(text="Rebuilding thumbnails...")
-        self.update_idletasks()
+    def _thumb_changed(self, val: int):
+        self.thumbnail_size = val
+        self.thumb_lbl.setText(f"Thumbnail: {val}px")
         self.refresh_album_view()
-        if self.album_loading_label:
-            self.album_loading_label.configure(text="")
-        self.refresh_editor_preview()
 
-    def _page_size_changed(self, value):
+    def _page_size_changed(self, val: str):
         try:
-            self.album_page_size = int(value)
+            self.album_page_size = int(val)
         except ValueError:
             self.album_page_size = 24
         self.album_page = 0
         self.refresh_album_view()
 
-    # --- Albums tab ---
+    # ─── Albums tab ───────────────────────────────────────────────────────────
+    def _build_albums_tab(self) -> QWidget:
+        w = QWidget()
+        h = QHBoxLayout(w)
+        h.setContentsMargins(12, 12, 12, 12)
+        h.setSpacing(12)
 
-    def _build_albums_tab(self):
-        tab = self.tabs.tab("Albums")
-        tab.grid_columnconfigure(0, weight=0)
-        tab.grid_columnconfigure(1, weight=1)
-        tab.grid_rowconfigure(0, weight=1)
+        # Left panel
+        left = QFrame()
+        left.setFixedWidth(300)
+        left.setStyleSheet(f"background: {PANEL_BG}; border-radius: 12px;")
+        lv = QVBoxLayout(left)
+        lv.setContentsMargins(14, 14, 14, 14)
 
-        left = ctk.CTkFrame(tab, fg_color="#F6F7FB", corner_radius=12)
-        left.grid(row=0, column=0, padx=(0, 12), pady=0, sticky="ns")
-        left.grid_rowconfigure(2, weight=1)
+        self.drop_zone = DropZone("⬇  Drop album folders here")
+        self.drop_zone.setMinimumHeight(70)
+        self.drop_zone.paths_dropped.connect(self._on_drop_albums)
+        lv.addWidget(self.drop_zone)
 
-        right = ctk.CTkFrame(tab, fg_color="#FFFFFF", corner_radius=12)
-        right.grid(row=0, column=1, padx=0, pady=0, sticky="nsew")
-        right.grid_rowconfigure(2, weight=1)
-        right.grid_columnconfigure(0, weight=1)
+        lv.addWidget(lbl("Detected albums", bold=True, size=14))
 
-        self.drop_label = ctk.CTkLabel(left, text="Drop album folders here",
-                                       fg_color="#E9EEF8", text_color="#0B5ED7",
-                                       corner_radius=12, width=230, height=70)
-        self.drop_label.grid(row=0, column=0, padx=14, pady=14, sticky="ew")
-        self.drop_label.drop_target_register(DND_FILES)
-        self.drop_label.dnd_bind("<<Drop>>", self.on_drop_album)
+        self.album_list_widget = QWidget()
+        self.album_list_layout = QVBoxLayout(self.album_list_widget)
+        self.album_list_layout.setSpacing(4)
+        self.album_list_layout.setContentsMargins(0, 0, 0, 0)
+        self.album_list_layout.addStretch()
 
-        ctk.CTkLabel(left, text="Detected albums",
-                     font=ctk.CTkFont(size=14, weight="bold"))\
-                     .grid(row=1, column=0, padx=14, pady=(0, 8), sticky="w")
-        self.album_list = ctk.CTkScrollableFrame(left, width=270, height=680, fg_color="#F6F7FB")
-        self.album_list.grid(row=2, column=0, padx=14, pady=(0, 14), sticky="nsew")
+        scroll_albums = QScrollArea()
+        scroll_albums.setWidget(self.album_list_widget)
+        scroll_albums.setWidgetResizable(True)
+        scroll_albums.setStyleSheet("background: transparent;")
+        lv.addWidget(scroll_albums, 1)
+        h.addWidget(left)
 
-        topbar = ctk.CTkFrame(right, fg_color="#FFFFFF")
-        topbar.grid(row=0, column=0, sticky="ew", padx=12, pady=(12, 6))
-        topbar.grid_columnconfigure(0, weight=1)
+        # Right panel
+        right = QFrame()
+        right.setStyleSheet(f"background: {WHITE}; border-radius: 12px;")
+        rv = QVBoxLayout(right)
+        rv.setContentsMargins(12, 12, 12, 12)
 
-        self.album_title = ctk.CTkLabel(topbar, text="No album selected",
-                                        font=ctk.CTkFont(size=16, weight="bold"))
-        self.album_title.grid(row=0, column=0, padx=6, pady=6, sticky="w")
+        topbar = QHBoxLayout()
+        self.album_title_lbl = lbl("No album selected", bold=True, size=16)
+        topbar.addWidget(self.album_title_lbl, 1)
+        self.page_info_lbl = lbl("Page 0/0")
+        topbar.addWidget(self.page_info_lbl)
+        b_prev = btn("◀", min_w=36)
+        b_next = btn("▶", min_w=36)
+        b_prev.clicked.connect(self.prev_page)
+        b_next.clicked.connect(self.next_page)
+        topbar.addWidget(b_prev)
+        topbar.addWidget(b_next)
+        rv.addLayout(topbar)
 
-        nav = ctk.CTkFrame(topbar, fg_color="transparent")
-        nav.grid(row=0, column=1, padx=6, pady=6, sticky="e")
-        self.page_info = ctk.CTkLabel(nav, text="Page 0/0")
-        self.page_info.pack(side="left", padx=8)
-        ctk.CTkButton(nav, text="◀", width=36, command=self.prev_page).pack(side="left", padx=2)
-        ctk.CTkButton(nav, text="▶", width=36, command=self.next_page).pack(side="left", padx=2)
+        self.album_loading_lbl = lbl("", color="#888")
+        rv.addWidget(self.album_loading_lbl)
 
-        self.album_loading_label = ctk.CTkLabel(right, text="", text_color="#888888")
-        self.album_loading_label.grid(row=1, column=0, padx=12, pady=(0, 2), sticky="w")
+        self.image_area_widget = QWidget()
+        self.image_area_layout = QGridLayout(self.image_area_widget)
+        self.image_area_layout.setSpacing(10)
+        self.image_area_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.image_area = ctk.CTkScrollableFrame(right, fg_color="#FFFFFF")
-        self.image_area.grid(row=2, column=0, padx=12, pady=(0, 12), sticky="nsew")
+        scroll_imgs = QScrollArea()
+        scroll_imgs.setWidget(self.image_area_widget)
+        scroll_imgs.setWidgetResizable(True)
+        rv.addWidget(scroll_imgs, 1)
 
-    # --- Editor tab ---
+        h.addWidget(right, 1)
+        return w
 
-    def _build_editor_tab(self):
-        tab = self.tabs.tab("Editor")
-        tab.grid_columnconfigure(0, weight=1)
-        tab.grid_rowconfigure(1, weight=1)
+    # ─── Editor tab ───────────────────────────────────────────────────────────
+    def _build_editor_tab(self) -> QWidget:
+        w = QWidget()
+        v = QVBoxLayout(w)
+        v.setContentsMargins(12, 12, 12, 12)
 
-        info = ctk.CTkFrame(tab, fg_color="#FFFFFF")
-        info.grid(row=0, column=0, padx=12, pady=12, sticky="ew")
-        info.grid_columnconfigure(0, weight=1)
+        # Top bar
+        top = QFrame()
+        top.setStyleSheet(f"background: {WHITE}; border-radius: 8px;")
+        th = QHBoxLayout(top)
+        self.editor_title_lbl = lbl("No image loaded", bold=True, size=16)
+        th.addWidget(self.editor_title_lbl, 1)
+        for label, slot in [
+            ("Rotate 90° left",  self.rotate_left),
+            ("Rotate 90° right", self.rotate_right),
+            ("Custom angle",     self.rotate_custom),
+            ("Crop mode",        self.toggle_crop_mode),
+            ("Reset",            self.reset_editor),
+        ]:
+            b = btn(label)
+            b.clicked.connect(slot)
+            th.addWidget(b)
+        b_save = btn("Save", BLUE)
+        b_save.clicked.connect(self.save_editor_image)
+        th.addWidget(b_save)
+        v.addWidget(top)
 
-        self.editor_title = ctk.CTkLabel(info, text="No image loaded",
-                                         font=ctk.CTkFont(size=16, weight="bold"))
-        self.editor_title.grid(row=0, column=0, padx=8, pady=8, sticky="w")
+        # Canvas
+        self.editor_canvas = EditorCanvas()
+        self.editor_canvas.crop_point_picked.connect(self._on_crop_point)
+        scroll_editor = QScrollArea()
+        scroll_editor.setWidget(self.editor_canvas)
+        scroll_editor.setWidgetResizable(False)
+        scroll_editor.setStyleSheet("background: #F7F8FB;")
+        v.addWidget(scroll_editor, 1)
 
-        btnbar = ctk.CTkFrame(info, fg_color="transparent")
-        btnbar.grid(row=0, column=1, padx=8, pady=8, sticky="e")
-        ctk.CTkButton(btnbar, text="Rotate 90° left", command=self.rotate_left).pack(side="left", padx=4)
-        ctk.CTkButton(btnbar, text="Rotate 90° right", command=self.rotate_right).pack(side="left", padx=4)
-        ctk.CTkButton(btnbar, text="Custom angle", command=self.rotate_custom).pack(side="left", padx=4)
-        ctk.CTkButton(btnbar, text="Crop mode", command=self.toggle_crop_mode).pack(side="left", padx=4)
-        ctk.CTkButton(btnbar, text="Reset", command=self.reset_editor).pack(side="left", padx=4)
-        ctk.CTkButton(btnbar, text="Save", command=self.save_editor_image, fg_color="#0B5ED7")\
-            .pack(side="left", padx=4)
+        # Bottom bar
+        bot = QFrame()
+        bot.setStyleSheet(f"background: {WHITE}; border-radius: 8px;")
+        bh = QHBoxLayout(bot)
+        for label, slot in [
+            ("Open image",       self.open_image_file),
+            ("Rename image",     self.rename_current_image),
+            ("Delete image",     self.delete_current_image),
+            ("Save as copy",     self.save_as_copy),
+        ]:
+            b = btn(label)
+            b.clicked.connect(slot)
+            bh.addWidget(b)
+        v.addWidget(bot)
+        return w
 
-        self.editor_canvas = ctk.CTkCanvas(tab, bg="#F7F8FB", highlightthickness=0)
-        self.editor_canvas.grid(row=1, column=0, padx=12, pady=(0, 12), sticky="nsew")
-        self.editor_canvas.bind("<Button-1>", self.on_editor_click)
+    # ─── Prefs tab ────────────────────────────────────────────────────────────
+    def _build_prefs_tab(self) -> QWidget:
+        outer = QWidget()
+        ov = QVBoxLayout(outer)
+        ov.setContentsMargins(0, 0, 0, 0)
 
-        bottom = ctk.CTkFrame(tab, fg_color="#FFFFFF")
-        bottom.grid(row=2, column=0, padx=12, pady=(0, 12), sticky="ew")
-        bottom.grid_columnconfigure((0, 1, 2, 3), weight=1)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        inner = QWidget()
+        inner.setStyleSheet(f"background: {WHITE};")
+        form = QFormLayout(inner)
+        form.setContentsMargins(20, 20, 20, 20)
+        form.setSpacing(10)
 
-        ctk.CTkButton(bottom, text="Open image", command=self.open_image_file)\
-            .grid(row=0, column=0, padx=6, pady=6, sticky="ew")
-        ctk.CTkButton(bottom, text="Rename image", command=self.rename_current_image)\
-            .grid(row=0, column=1, padx=6, pady=6, sticky="ew")
-        ctk.CTkButton(bottom, text="Delete image", command=self.delete_current_image)\
-            .grid(row=0, column=2, padx=6, pady=6, sticky="ew")
-        ctk.CTkButton(bottom, text="Save as copy", command=self.save_as_copy)\
-            .grid(row=0, column=3, padx=6, pady=6, sticky="ew")
-
-    # --- Prefs tab ---
-
-    def _build_prefs_tab(self):
-        tab = self.tabs.tab("Prefs")
-        tab.grid_columnconfigure(1, weight=1)
-
-        self.prefs_vars = {
-            "twentyfour": ctk.StringVar(value="false"),
-            "language_code": ctk.StringVar(value="EN"),
-            "brightness": ctk.StringVar(value="255"),
-            "open_at_startup": ctk.StringVar(value="1"),
-            "auto_on_off": ctk.StringVar(value="2"),
-            "sensor_on": ctk.StringVar(value="10"),
-            "sensor_off": ctk.StringVar(value="4"),
-            "time_on": ctk.StringVar(value="420"),
-            "time_off": ctk.StringVar(value="1020"),
-            "auto_tilt": ctk.StringVar(value="true"),
-            "sequence": ctk.StringVar(value="1"),
-            "effect": ctk.StringVar(value="0"),
-            "calendar": ctk.StringVar(value="0"),
-            "timing": ctk.StringVar(value="300"),
-            "collage": ctk.StringVar(value="0"),
-            "background_color": ctk.StringVar(value="3"),
-            "delete_enabled": ctk.StringVar(value="true"),
-            "beep": ctk.StringVar(value="false"),
-            "format": ctk.StringVar(value="0"),
-            "demo_mode": ctk.StringVar(value="false"),
-        }
-
-        form = ctk.CTkScrollableFrame(tab, fg_color="#FFFFFF")
-        form.pack(fill="both", expand=True, padx=12, pady=12)
-
-        row = 0
-        fields = [
-            ("language_code", "Language (EN/DE/FR/ES)", "dropdown", ["EN", "DE", "FR", "ES"]),
-            ("brightness", "Brightness (0-255)", "slider", None),
-            ("twentyfour", "24h clock (true/false)", "bool", None),
-
-            ("format", "Format (0=Original,1=RadiantColor,2=Scale to fit)", "entry", None),
-            ("timing", "Slideshow interval (seconds)", "entry", None),
-            ("sequence", "Sequence (0=Ordered,1=Shuffle)", "entry", None),
-            ("effect", "Transition effect (0-16)", "entry", None),
-            ("collage", "Collage (0=Off,1=On)", "entry", None),
-            ("calendar", "Calendar/Clock (0=Week,1=Month,2=Clock,3=None)", "entry", None),
-
-            ("open_at_startup", "Open at startup (1=On,0=Off)", "entry", None),
-            ("auto_on_off", "Auto on/off (2=Light+Time,1=Time,0=Off)", "entry", None),
-            ("sensor_on", "Sensor on (0-10, max)", "entry", None),
-            ("sensor_off", "Sensor off (0-10,< on)", "entry", None),
-            ("time_on", "Time on (minutes from 0:00)", "entry", None),
-            ("time_off", "Time off (minutes from 0:00)", "entry", None),
-
-            ("auto_tilt", "Auto tilt (true/false)", "bool", None),
-            ("background_color", "Background color (0-3)", "entry", None),
-            ("delete_enabled", "Deleting enabled (true/false)", "bool", None),
-            ("beep", "Beep (true/false)", "bool", None),
-            ("demo_mode", "Demo mode (true/false)", "bool", None),
+        FIELDS = [
+            ("language_code",    "Language",                     "combo",  ["EN", "DE", "FR", "ES"]),
+            ("brightness",       "Brightness (0-255)",           "slider", None),
+            ("twentyfour",       "24h clock",                    "bool",   None),
+            ("format",           "Format (0=Original,1=RadiantColor,2=Scale)", "line", None),
+            ("timing",           "Slideshow interval (seconds)", "line",   None),
+            ("sequence",         "Sequence (0=Ordered,1=Shuffle)","line",  None),
+            ("effect",           "Transition effect (0-16)",     "line",   None),
+            ("collage",          "Collage (0=Off,1=On)",         "line",   None),
+            ("calendar",         "Calendar/Clock (0-3)",         "line",   None),
+            ("open_at_startup",  "Open at startup (1/0)",        "line",   None),
+            ("auto_on_off",      "Auto on/off (0-2)",            "line",   None),
+            ("sensor_on",        "Sensor on (0-10)",             "line",   None),
+            ("sensor_off",       "Sensor off (0-10)",            "line",   None),
+            ("time_on",          "Time on (min from 0:00)",      "line",   None),
+            ("time_off",         "Time off (min from 0:00)",     "line",   None),
+            ("auto_tilt",        "Auto tilt",                    "bool",   None),
+            ("background_color", "Background color (0-3)",       "line",   None),
+            ("delete_enabled",   "Deleting enabled",             "bool",   None),
+            ("beep",             "Beep",                         "bool",   None),
+            ("demo_mode",        "Demo mode",                    "bool",   None),
         ]
 
-        self.brightness_scale = None
-        self.brightness_value_label = None
+        DEFAULTS = {
+            "language_code": "EN", "brightness": "255", "twentyfour": "false",
+            "format": "0", "timing": "300", "sequence": "1", "effect": "0",
+            "collage": "0", "calendar": "0", "open_at_startup": "1",
+            "auto_on_off": "2", "sensor_on": "10", "sensor_off": "4",
+            "time_on": "420", "time_off": "1020", "auto_tilt": "true",
+            "background_color": "3", "delete_enabled": "true",
+            "beep": "false", "demo_mode": "false",
+        }
 
-        used = set()
-        for key, label, kind, values in fields:
-            if key in used:
-                continue
-            used.add(key)
-            ctk.CTkLabel(form, text=label).grid(row=row, column=0, padx=8, pady=6, sticky="w")
-            if kind == "dropdown":
-                w = ctk.CTkOptionMenu(form, variable=self.prefs_vars[key], values=values)
-                w.grid(row=row, column=1, padx=8, pady=6, sticky="w")
+        for key, label, kind, opts in FIELDS:
+            if kind == "combo":
+                w = QComboBox()
+                w.addItems(opts)
+                w.setCurrentText(DEFAULTS.get(key, opts[0]))
+                self.prefs_widgets[key] = w
             elif kind == "bool":
-                w = ctk.CTkOptionMenu(form, variable=self.prefs_vars[key], values=["true", "false"])
-                w.grid(row=row, column=1, padx=8, pady=6, sticky="w")
-            elif kind == "slider" and key == "brightness":
-                frame = ctk.CTkFrame(form, fg_color="transparent")
-                frame.grid(row=row, column=1, padx=8, pady=6, sticky="w")
-                self.brightness_scale = ctk.CTkSlider(
-                    frame, from_=0, to=255, number_of_steps=255,
-                    command=lambda v: self._brightness_slider_changed(v)
-                )
-                try:
-                    self.brightness_scale.set(int(self.prefs_vars["brightness"].get()))
-                except ValueError:
-                    self.brightness_scale.set(255)
-                    self.prefs_vars["brightness"].set("255")
-                self.brightness_scale.pack(side="left", padx=(0, 10))
-                self.brightness_value_label = ctk.CTkLabel(
-                    frame, text=self.prefs_vars["brightness"].get()
-                )
-                self.brightness_value_label.pack(side="left")
-                w = self.brightness_scale
+                w = QComboBox()
+                w.addItems(["true", "false"])
+                w.setCurrentText(DEFAULTS.get(key, "false"))
+                self.prefs_widgets[key] = w
+            elif kind == "slider":
+                container = QWidget()
+                sh = QHBoxLayout(container)
+                sh.setContentsMargins(0, 0, 0, 0)
+                sl = QSlider(Qt.Orientation.Horizontal)
+                sl.setMinimum(0); sl.setMaximum(255)
+                sl.setValue(int(DEFAULTS.get(key, "255")))
+                val_lbl = QLabel(DEFAULTS.get(key, "255"))
+                val_lbl.setFixedWidth(36)
+                sl.valueChanged.connect(lambda v, l=val_lbl: l.setText(str(v)))
+                sh.addWidget(sl)
+                sh.addWidget(val_lbl)
+                self.brightness_slider  = sl
+                self.brightness_val_lbl = val_lbl
+                self.prefs_widgets[key] = sl
+                w = container
             else:
-                w = ctk.CTkEntry(form, textvariable=self.prefs_vars[key], width=220)
-                w.grid(row=row, column=1, padx=8, pady=6, sticky="w")
-            row += 1
+                w = QLineEdit(DEFAULTS.get(key, ""))
+                self.prefs_widgets[key] = w
+            form.addRow(label, w)
 
-        ctk.CTkButton(form, text="Load prefs", command=self.load_prefs)\
-            .grid(row=row, column=0, padx=8, pady=14, sticky="ew")
-        ctk.CTkButton(form, text="Save prefs", command=self.save_prefs)\
-            .grid(row=row, column=1, padx=8, pady=14, sticky="ew")
+        btn_row = QHBoxLayout()
+        b_load = btn("Load prefs")
+        b_save = btn("Save prefs")
+        b_load.clicked.connect(self.load_prefs)
+        b_save.clicked.connect(self.save_prefs)
+        btn_row.addWidget(b_load)
+        btn_row.addWidget(b_save)
+        form.addRow(btn_row)
 
-    def _brightness_slider_changed(self, value):
-        v = int(float(value))
-        self.prefs_vars["brightness"].set(str(v))
-        if self.brightness_value_label:
-            self.brightness_value_label.configure(text=str(v))
+        scroll.setWidget(inner)
+        ov.addWidget(scroll)
+        return outer
 
-    # --- RSS tab ---
+    def _prefs_get(self, key: str) -> str:
+        w = self.prefs_widgets.get(key)
+        if isinstance(w, QComboBox):
+            return w.currentText()
+        if isinstance(w, QSlider):
+            return str(w.value())
+        if isinstance(w, QLineEdit):
+            return w.text()
+        return ""
 
-    def _build_rss_tab(self):
-        tab = self.tabs.tab("RSS")
-        tab.grid_columnconfigure(0, weight=1)
-        tab.grid_rowconfigure(0, weight=1)
-        tab.grid_rowconfigure(1, weight=0)
+    def _prefs_set(self, key: str, value: str):
+        w = self.prefs_widgets.get(key)
+        if isinstance(w, QComboBox):
+            idx = w.findText(value)
+            if idx >= 0:
+                w.setCurrentIndex(idx)
+        elif isinstance(w, QSlider):
+            try:
+                w.setValue(int(value))
+                if self.brightness_val_lbl:
+                    self.brightness_val_lbl.setText(value)
+            except ValueError:
+                pass
+        elif isinstance(w, QLineEdit):
+            w.setText(value)
 
-        upper = ctk.CTkFrame(tab, fg_color="#FFFFFF")
-        upper.grid(row=0, column=0, padx=12, pady=12, sticky="nsew")
-        upper.grid_columnconfigure(1, weight=1)
-        upper.grid_rowconfigure(2, weight=1)
+    # ─── RSS tab ──────────────────────────────────────────────────────────────
+    def _build_rss_tab(self) -> QWidget:
+        w = QWidget()
+        h = QHBoxLayout(w)
+        h.setContentsMargins(12, 12, 12, 12)
+        h.setSpacing(12)
 
-        left = ctk.CTkFrame(upper, fg_color="#F6F7FB")
-        left.grid(row=0, column=0, rowspan=3, padx=(0, 12), pady=0, sticky="ns")
-        left.grid_rowconfigure(3, weight=1)
+        # Left
+        left = QFrame()
+        left.setFixedWidth(290)
+        left.setStyleSheet(f"background: {PANEL_BG}; border-radius: 12px;")
+        lv = QVBoxLayout(left)
+        lv.setContentsMargins(12, 12, 12, 12)
+        lv.addWidget(lbl("RSS feeds", bold=True, size=14))
 
-        ctk.CTkLabel(left, text="RSS feeds", font=ctk.CTkFont(size=14, weight="bold"))\
-            .grid(row=0, column=0, padx=12, pady=(12, 8), sticky="w")
-        ctk.CTkButton(left, text="Add feed", command=self.add_rss_feed)\
-            .grid(row=1, column=0, padx=12, pady=6, sticky="ew")
-        ctk.CTkButton(left, text="Save feeds", command=self.save_rss_feeds)\
-            .grid(row=2, column=0, padx=12, pady=6, sticky="ew")
-        self.feed_list = ctk.CTkScrollableFrame(left, width=250, height=560, fg_color="#F6F7FB")
-        self.feed_list.grid(row=3, column=0, padx=12, pady=12, sticky="nsew")
+        row_btns = QHBoxLayout()
+        b_add  = btn("Add feed")
+        b_save = btn("Save feeds")
+        b_add.clicked.connect(self.add_rss_feed)
+        b_save.clicked.connect(self.save_rss_feeds)
+        row_btns.addWidget(b_add)
+        row_btns.addWidget(b_save)
+        lv.addLayout(row_btns)
 
-        self.feed_title = ctk.CTkLabel(upper, text="No feed selected",
-                                       font=ctk.CTkFont(size=16, weight="bold"))
-        self.feed_title.grid(row=0, column=1, padx=6, pady=(12, 4), sticky="w")
-        self.feed_meta = ctk.CTkLabel(upper, text="", text_color="#666666")
-        self.feed_meta.grid(row=1, column=1, padx=6, pady=(0, 8), sticky="w")
+        self.feed_list_widget  = QWidget()
+        self.feed_list_layout  = QVBoxLayout(self.feed_list_widget)
+        self.feed_list_layout.setSpacing(4)
+        self.feed_list_layout.setContentsMargins(0, 0, 0, 0)
+        self.feed_list_layout.addStretch()
+        scroll_feeds = QScrollArea()
+        scroll_feeds.setWidget(self.feed_list_widget)
+        scroll_feeds.setWidgetResizable(True)
+        lv.addWidget(scroll_feeds, 1)
 
-        self.feed_gallery = ctk.CTkScrollableFrame(upper, fg_color="#FFFFFF")
-        self.feed_gallery.grid(row=2, column=1, padx=12, pady=(0, 12), sticky="nsew")
+        reload_btn = btn("Reload feeds")
+        reload_btn.clicked.connect(self.load_rss_sources)
+        del_btn    = btn("Delete feed", RED)
+        del_btn.clicked.connect(self.delete_selected_feed)
+        lv.addWidget(reload_btn)
+        lv.addWidget(del_btn)
+        h.addWidget(left)
 
-        lower = ctk.CTkFrame(tab, fg_color="#FFFFFF")
-        lower.grid(row=1, column=0, padx=12, pady=(0, 12), sticky="ew")
-        lower.grid_columnconfigure((0, 1, 2), weight=1)
+        # Right
+        right = QFrame()
+        right.setStyleSheet(f"background: {WHITE}; border-radius: 12px;")
+        rv = QVBoxLayout(right)
+        rv.setContentsMargins(12, 12, 12, 12)
+        self.feed_title_lbl = lbl("No feed selected", bold=True, size=16)
+        self.feed_meta_lbl  = lbl("", color="#666")
+        rv.addWidget(self.feed_title_lbl)
+        rv.addWidget(self.feed_meta_lbl)
 
-        ctk.CTkButton(lower, text="Reload feeds", command=self.load_rss_sources)\
-            .grid(row=0, column=0, padx=6, pady=6, sticky="ew")
-        ctk.CTkButton(lower, text="Delete feed", command=self.delete_selected_feed)\
-            .grid(row=0, column=1, padx=6, pady=6, sticky="ew")
-        ctk.CTkButton(lower, text="Save rss.cfg", command=self.save_rss_feeds)\
-            .grid(row=0, column=2, padx=6, pady=6, sticky="ew")
+        self.feed_gallery_widget = QWidget()
+        self.feed_gallery_layout = QGridLayout(self.feed_gallery_widget)
+        self.feed_gallery_layout.setSpacing(10)
+        scroll_gallery = QScrollArea()
+        scroll_gallery.setWidget(self.feed_gallery_widget)
+        scroll_gallery.setWidgetResizable(True)
+        rv.addWidget(scroll_gallery, 1)
+        h.addWidget(right, 1)
+        return w
 
-    # --- Tools tab ---
+    # ─── Tools tab ────────────────────────────────────────────────────────────
+    def _build_tools_tab(self) -> QWidget:
+        w = QWidget()
+        v = QVBoxLayout(w)
+        v.setContentsMargins(20, 20, 20, 20)
+        v.setSpacing(10)
 
-    def _build_tools_tab(self):
-        tab = self.tabs.tab("Tools")
-        tab.grid_columnconfigure(0, weight=1)
+        v.addWidget(lbl("Device and folder statistics", bold=True, size=18))
 
-        ctk.CTkLabel(tab, text="Device and folder statistics",
-                     font=ctk.CTkFont(size=18, weight="bold"))\
-                     .grid(row=0, column=0, padx=16, pady=(16, 10), sticky="w")
-        ctk.CTkButton(tab, text="Reload everything", command=self.refresh_all)\
-            .grid(row=1, column=0, padx=16, pady=8, sticky="ew")
-        ctk.CTkButton(tab, text="Scan device", command=self.scan_device)\
-            .grid(row=2, column=0, padx=16, pady=8, sticky="ew")
-        ctk.CTkButton(tab, text="Import album/folder", command=self.import_album_folder)\
-            .grid(row=3, column=0, padx=16, pady=8, sticky="ew")
+        for label, slot in [
+            ("Reload everything",    self.refresh_all),
+            ("Scan device",          self.scan_device),
+            ("Import album/folder",  self.import_album_folder),
+            ("Create backup (ZIP)",  self.create_backup),
+            ("Restore backup",       self.restore_backup),
+        ]:
+            b = btn(label)
+            b.clicked.connect(slot)
+            v.addWidget(b)
 
-        ctk.CTkButton(tab, text="Create backup (ZIP)", command=self.create_backup)\
-            .grid(row=4, column=0, padx=16, pady=8, sticky="ew")
-        ctk.CTkButton(tab, text="Restore backup", command=self.restore_backup)\
-            .grid(row=5, column=0, padx=16, pady=8, sticky="ew")
+        b_exit = btn("Exit", RED)
+        b_exit.clicked.connect(self.close)
+        v.addWidget(b_exit)
 
-        ctk.CTkButton(tab, text="Exit", command=self.destroy,
-                      fg_color="#C0392B")\
-            .grid(row=6, column=0, padx=16, pady=8, sticky="ew")
+        self.stats_box = QTextEdit()
+        self.stats_box.setReadOnly(True)
+        self.stats_box.setStyleSheet(f"background: {WHITE}; border-radius: 8px; font-family: monospace;")
+        v.addWidget(self.stats_box, 1)
+        return w
 
-        self.stats_box = ctk.CTkTextbox(tab, height=360, fg_color="#FFFFFF")
-        self.stats_box.grid(row=7, column=0, padx=16, pady=16, sticky="nsew")
-
-    # --- Auto-detect / device ---
-
-    def auto_detect_loop(self):
+    # ─── Auto detect ──────────────────────────────────────────────────────────
+    def _auto_detect_tick(self):
         try:
             self.scan_device(silent=True)
         except Exception:
             logging.exception("Auto-detect error")
-        self.after(3000, self.auto_detect_loop)
 
     def manual_select_device(self):
-        path = filedialog.askdirectory(title="Select PhotoFrame device folder")
+        path = QFileDialog.getExistingDirectory(self, "Select PhotoFrame device folder")
         if not path:
             return
         self.device_root = path
-        self.status.configure(text="Device (manual) connected", text_color="#118C4F")
-        self.path_label.configure(text=f"Path: {self.device_root}")
+        self.status_lbl.setText("Device (manual) connected")
+        self.status_lbl.setStyleSheet(f"color: {GREEN};")
+        self.path_lbl.setText(f"Path: {path}")
         self.refresh_all()
 
-    def scan_device(self, silent=False):
+    def scan_device(self, silent: bool = False):
         try:
-            found = self.find_device_root()
+            found   = self._find_device_root()
             changed = found != self.device_root
             self.device_root = found
-            if self.device_root:
-                self.status.configure(text="Device connected", text_color="#118C4F")
-                self.path_label.configure(text=f"Path: {self.device_root}")
-                self.update_storage_info()
-                self.update_album_info()
+            if found:
+                self.status_lbl.setText("Device connected")
+                self.status_lbl.setStyleSheet(f"color: {GREEN};")
+                self.path_lbl.setText(f"Path: {found}")
+                self._update_storage_info()
+                self._update_album_info()
                 if changed:
-                    logging.info("Device detected: %s", self.device_root)
+                    logging.info("Device detected: %s", found)
                     self.refresh_all()
             else:
-                self.status.configure(text="No device connected", text_color="#8A8A8A")
-                self.path_label.configure(text="Path: -")
-                self.storage_label.configure(text="Storage: -")
-                self.album_info_label.configure(text="Albums: -")
+                self.status_lbl.setText("No device connected")
+                self.status_lbl.setStyleSheet("color: #8A8A8A;")
+                self.path_lbl.setText("Path: -")
+                self.storage_lbl.setText("Storage: -")
+                self.album_info_lbl.setText("Albums: -")
                 if changed:
                     logging.info("Device disconnected")
-                    self.clear_album_view()
-            if not silent and not self.device_root:
-                messagebox.showwarning("Device not found", "No Philips PhotoFrame mountpoint detected.")
+                    self._clear_album_view()
+            if not silent and not found:
+                QMessageBox.warning(self, "Device not found",
+                                    "No Philips PhotoFrame mountpoint detected.")
         except Exception:
             logging.exception("Scan error")
 
-    def find_device_root(self):
+    def _find_device_root(self) -> str | None:
         candidates = []
         try:
             for part in psutil.disk_partitions(all=False):
@@ -584,14 +849,10 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
                 if not mp or not os.path.isdir(mp):
                     continue
                 score = 0
-                if os.path.exists(os.path.join(mp, ".prefs")):
-                    score += 3
-                if os.path.exists(os.path.join(mp, ".config", "rss.cfg")):
-                    score += 2
-                if os.path.isdir(os.path.join(mp, "ALBUM")):
-                    score += 4
-                if os.path.isdir(os.path.join(mp, "Album")):
-                    score += 4
+                if os.path.exists(os.path.join(mp, ".prefs")):           score += 3
+                if os.path.exists(os.path.join(mp, ".config", "rss.cfg")): score += 2
+                if os.path.isdir(os.path.join(mp, "ALBUM")):             score += 4
+                if os.path.isdir(os.path.join(mp, "Album")):             score += 4
                 if score > 0:
                     candidates.append((score, mp))
         except Exception:
@@ -602,30 +863,28 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         logging.info("Device candidates: %s", candidates)
         return candidates[0][1]
 
-    # --- Refresh / stats ---
-
+    # ─── Refresh ──────────────────────────────────────────────────────────────
     def refresh_all(self):
         self.refresh_album_list()
         self.load_prefs()
         self.load_rss_sources()
-        self.update_storage_info()
-        self.update_album_info()
+        self._update_storage_info()
+        self._update_album_info()
         self.refresh_album_view()
-        self.refresh_stats()
-        self.refresh_editor_preview()
+        self._refresh_stats()
 
-    def update_storage_info(self):
+    def _update_storage_info(self):
         if not self.device_root:
             return
         try:
-            usage = shutil.disk_usage(self.device_root)
-            self.storage_label.configure(
-                text=f"Storage: free {human_size(usage.free)} / total {human_size(usage.total)}"
+            u = shutil.disk_usage(self.device_root)
+            self.storage_lbl.setText(
+                f"Storage: free {human_size(u.free)} / total {human_size(u.total)}"
             )
         except Exception:
             logging.exception("Storage info failed")
 
-    def _album_root(self):
+    def _album_root(self) -> str | None:
         if not self.device_root:
             return None
         for folder in ("ALBUM", "Album"):
@@ -640,82 +899,78 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
             logging.exception("Could not create ALBUM folder")
             return None
 
-    def update_album_info(self):
-        if not self.device_root:
-            self.album_info_label.configure(text="Albums: -")
-            return
+    def _update_album_info(self):
         root = self._album_root()
         if not root:
-            self.album_info_label.configure(text="Albums: -")
+            self.album_info_lbl.setText("Albums: -")
             return
         try:
             albums = [os.path.join(root, d) for d in sorted(os.listdir(root))
                       if os.path.isdir(os.path.join(root, d))]
-            total_images = 0
-            for p in albums:
-                total_images += len([
-                    x for x in os.listdir(p)
-                    if os.path.splitext(x)[1].lower() in IMAGE_EXTS
-                    and os.path.isfile(os.path.join(p, x))
-                ])
-            self.album_info_label.configure(
-                text=f"Albums: {len(albums)} folders · {total_images} images"
+            total = sum(
+                len([x for x in os.listdir(p)
+                     if os.path.splitext(x)[1].lower() in IMAGE_EXTS
+                     and os.path.isfile(os.path.join(p, x))])
+                for p in albums
             )
+            self.album_info_lbl.setText(f"Albums: {len(albums)} folders · {total} images")
         except Exception:
             logging.exception("Album info failed")
 
-    def refresh_stats(self):
+    def _refresh_stats(self):
         if not self.device_root:
             return
+        root = self._album_root()
+        if not root:
+            return
+        lines = [f"Device: {self.device_root}", f"Build: {__version__} / {__build_date__}", ""]
         try:
-            root = self._album_root()
-            if not root:
-                return
-            lines = [f"Device: {self.device_root}",
-                     f"Build: {__version__} / {__build_date__}",
-                     ""]
-            if os.path.isdir(root):
-                for d in sorted(os.listdir(root)):
-                    p = os.path.join(root, d)
-                    if os.path.isdir(p):
-                        files, subdirs, size = dir_stats(p)
-                        img_count = len([
-                            x for x in os.listdir(p)
-                            if os.path.splitext(x)[1].lower() in IMAGE_EXTS
-                            and os.path.isfile(os.path.join(p, x))
-                        ])
-                        lines.append(f"{d}: {img_count} images, {files} files, "
-                                     f"{subdirs} subfolders, {human_size(size)}")
-            self.stats_box.delete("1.0", "end")
-            self.stats_box.insert("1.0", "\n".join(lines))
+            for d in sorted(os.listdir(root)):
+                p = os.path.join(root, d)
+                if os.path.isdir(p):
+                    files, subdirs, size = dir_stats(p)
+                    img_count = len([x for x in os.listdir(p)
+                                     if os.path.splitext(x)[1].lower() in IMAGE_EXTS
+                                     and os.path.isfile(os.path.join(p, x))])
+                    lines.append(f"{d}: {img_count} images, {files} files, "
+                                 f"{subdirs} subfolders, {human_size(size)}")
         except Exception:
             logging.exception("Stats failed")
+        self.stats_box.setPlainText("\n".join(lines))
 
-    # --- Albums ---
-
-    def clear_album_view(self):
-        for w in self.album_list.winfo_children():
-            w.destroy()
-        for w in self.image_area.winfo_children():
-            w.destroy()
-        self.album_title.configure(text="No album selected")
-        self.page_info.configure(text="Page 0/0")
+    # ─── Albums ───────────────────────────────────────────────────────────────
+    def _clear_album_view(self):
+        self._clear_layout(self.album_list_layout)
+        self._clear_grid(self.image_area_layout)
+        self.album_title_lbl.setText("No album selected")
+        self.page_info_lbl.setText("Page 0/0")
         self.album_items_current = []
-        self.current_album_path = None
-        self.current_album_name = None
+        self.current_album_path  = None
+        self.current_album_name  = None
         self.album_page = 0
-        if self.album_loading_label:
-            self.album_loading_label.configure(text="")
+
+    def _clear_layout(self, layout):
+        while layout.count() > 0:
+            item = layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+    def _clear_grid(self, layout):
+        while layout.count() > 0:
+            item = layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
 
     def refresh_album_list(self):
-        for w in self.album_list.winfo_children():
-            w.destroy()
+        self._clear_layout(self.album_list_layout)
         if not self.device_root:
-            ctk.CTkLabel(self.album_list, text="No device detected").pack(padx=10, pady=10)
+            self.album_list_layout.addWidget(lbl("No device detected"))
+            self.album_list_layout.addStretch()
             return
         root_dir = self._album_root()
         if not root_dir:
-            ctk.CTkLabel(self.album_list, text="No ALBUM/Album folder found").pack(padx=10, pady=10)
+            self.album_list_layout.addWidget(lbl("No ALBUM/Album folder found"))
+            self.album_list_layout.addStretch()
             return
         albums = []
         try:
@@ -723,115 +978,80 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
                 full = os.path.join(root_dir, name)
                 if os.path.isdir(full):
                     files, _, size = dir_stats(full)
-                    img_count = len([
-                        x for x in os.listdir(full)
-                        if os.path.splitext(x)[1].lower() in IMAGE_EXTS
-                        and os.path.isfile(os.path.join(full, x))
-                    ])
+                    img_count = len([x for x in os.listdir(full)
+                                     if os.path.splitext(x)[1].lower() in IMAGE_EXTS
+                                     and os.path.isfile(os.path.join(full, x))])
                     albums.append((name, full, img_count, human_size(size)))
         except Exception:
             logging.exception("Failed to read album list")
         if not albums:
-            ctk.CTkLabel(self.album_list, text="No albums found").pack(padx=10, pady=10)
+            self.album_list_layout.addWidget(lbl("No albums found"))
+            self.album_list_layout.addStretch()
             return
         for name, full, img_count, size in albums:
-            self._album_row(name, full, img_count, size)
+            self._add_album_row(name, full, img_count, size)
+        self.album_list_layout.addStretch()
 
-    def _album_row(self, name, path, img_count, size):
-        row = ctk.CTkFrame(self.album_list, fg_color="#FFFFFF")
-        row.pack(fill="x", padx=4, pady=4)
-        txt = f"{name}\n{img_count} images · {size}"
-        ctk.CTkButton(row, text=txt, anchor="w", fg_color="transparent", text_color="#111111",
-                      hover_color="#EAF1FF",
-                      command=lambda p=path, n=name: self.open_album(p, n))\
-            .pack(side="left", fill="x", expand=True, padx=(8, 4), pady=6)
-        ctk.CTkButton(row, text="✎", width=34,
-                      command=lambda p=path: self.rename_path(p),
-                      fg_color="#0B5ED7").pack(side="left", padx=2)
-        ctk.CTkButton(row, text="🗑", width=34,
-                      command=lambda p=path: self.delete_path(p),
-                      fg_color="#C0392B").pack(side="left", padx=(2, 8))
+    def _add_album_row(self, name: str, path: str, img_count: int, size: str):
+        row = QFrame()
+        row.setStyleSheet(f"background: {WHITE}; border-radius: 8px;")
+        h = QHBoxLayout(row)
+        h.setContentsMargins(8, 6, 8, 6)
+        txt_btn = QPushButton(f"{name}\n{img_count} images · {size}")
+        txt_btn.setStyleSheet(
+            "background: transparent; color: #111; text-align: left; "
+            "border: none; font-size: 12px; padding: 2px;"
+        )
+        txt_btn.clicked.connect(lambda _=False, p=path, n=name: self.open_album(p, n))
+        h.addWidget(txt_btn, 1)
+        b_ren = btn("✎", min_w=30)
+        b_del = btn("🗑", RED, min_w=30)
+        b_ren.clicked.connect(lambda _=False, p=path: self.rename_path(p))
+        b_del.clicked.connect(lambda _=False, p=path: self.delete_path(p))
+        h.addWidget(b_ren)
+        h.addWidget(b_del)
+        self.album_list_layout.insertWidget(self.album_list_layout.count() - 1, row)
 
-    def open_album(self, path, name):
+    def open_album(self, path: str, name: str):
         self.current_album_path = path
         self.current_album_name = name
         self.album_page = 0
         logging.info("Album opened: %s", path)
-        self.album_title.configure(text=name)
-        if self.album_loading_label:
-            self.album_loading_label.configure(text="Loading album...")
-        self.update_idletasks()
+        self.album_title_lbl.setText(name)
+        self.album_loading_lbl.setText("Loading album…")
+        QApplication.processEvents()
         self.refresh_album_view()
-        if self.album_loading_label:
-            self.album_loading_label.configure(text="")
+        self.album_loading_lbl.setText("")
 
     def refresh_album_view(self):
-        for w in self.image_area.winfo_children():
-            w.destroy()
-        self._tk_refs = []
+        self._clear_grid(self.image_area_layout)
         if not self.current_album_path or not os.path.isdir(self.current_album_path):
             return
         try:
             files = [f for f in sorted(os.listdir(self.current_album_path))
                      if os.path.splitext(f)[1].lower() in IMAGE_EXTS]
-            total = len(files)
+            total  = len(files)
             self.album_items_current = files
-            pages = max(1, (total + self.album_page_size - 1) // self.album_page_size)
+            pages  = max(1, (total + self.album_page_size - 1) // self.album_page_size)
             if self.album_page >= pages:
                 self.album_page = max(0, pages - 1)
-            start = self.album_page * self.album_page_size
-            end = start + self.album_page_size
-            view = files[start:end]
-            self.page_info.configure(
-                text=f"Page {self.album_page + 1}/{pages} · {total} images"
-            )
-            logging.info("Rendering album %s: total=%s page=%s view=%s",
-                         self.current_album_path, total, self.album_page + 1, len(view))
+            start  = self.album_page * self.album_page_size
+            view   = files[start: start + self.album_page_size]
+            self.page_info_lbl.setText(f"Page {self.album_page + 1}/{pages} · {total} images")
             if not view:
-                ctk.CTkLabel(self.image_area, text="No images found").pack(padx=16, pady=16)
+                self.image_area_layout.addWidget(lbl("No images found"), 0, 0)
                 return
-            grid = ctk.CTkFrame(self.image_area, fg_color="#FFFFFF")
-            grid.pack(fill="both", expand=True)
             cols = 4
-            for idx, file in enumerate(view):
-                path = os.path.join(self.current_album_path, file)
-                r = idx // cols
-                c = idx % cols
-                self._image_card(grid, path, file, r, c)
+            for idx, filename in enumerate(view):
+                path = os.path.join(self.current_album_path, filename)
+                card = ImageCard(path, filename, self.thumbnail_size)
+                card.edit_requested.connect(self.open_image_path)
+                card.rename_requested.connect(self.rename_path)
+                card.delete_requested.connect(self.delete_path)
+                self.image_area_layout.addWidget(card, idx // cols, idx % cols)
         except Exception:
             logging.exception("Album view failed")
-            messagebox.showerror("Error", "Album could not be loaded. See terminal for details.")
-
-    def _image_card(self, parent, path, filename, row, col):
-        card = ctk.CTkFrame(parent, fg_color="#F9FAFC", corner_radius=12)
-        card.grid(row=row, column=col, padx=10, pady=10, sticky="n")
-        try:
-            img = Image.open(path)
-            img = ImageOps.exif_transpose(img)
-            img.thumbnail((self.thumbnail_size, self.thumbnail_size))
-            photo = ImageTk.PhotoImage(img)
-            lbl = ctk.CTkLabel(card, image=photo, text="")
-            lbl.pack(padx=10, pady=(10, 6))
-            card._img_ref = photo
-            self._tk_refs.append(photo)
-        except Exception:
-            logging.exception("Failed to load image: %s", path)
-            ctk.CTkLabel(card, text="Image error", text_color="#AA0000").pack(padx=10, pady=20)
-
-        ctk.CTkLabel(card, text=filename,
-                     wraplength=self.thumbnail_size + 20,
-                     justify="center").pack(padx=8, pady=(0, 8))
-        btns = ctk.CTkFrame(card, fg_color="transparent")
-        btns.pack(pady=(0, 10))
-        ctk.CTkButton(btns, text="Edit", width=84,
-                      command=lambda p=path: self.open_image_path(p))\
-            .pack(side="left", padx=4)
-        ctk.CTkButton(btns, text="✎", width=32,
-                      command=lambda p=path: self.rename_path(p),
-                      fg_color="#0B5ED7").pack(side="left", padx=4)
-        ctk.CTkButton(btns, text="🗑", width=32,
-                      command=lambda p=path: self.delete_path(p),
-                      fg_color="#C0392B").pack(side="left", padx=4)
+            QMessageBox.critical(self, "Error", "Album could not be loaded.")
 
     def prev_page(self):
         if self.current_album_path and self.album_page > 0:
@@ -841,20 +1061,39 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
     def next_page(self):
         if not self.current_album_path:
             return
-        total = len(getattr(self, "album_items_current", []))
+        total = len(self.album_items_current)
         pages = max(1, (total + self.album_page_size - 1) // self.album_page_size)
         if self.album_page + 1 < pages:
             self.album_page += 1
             self.refresh_album_view()
 
-    # --- Rename / delete ---
+    def _on_drop_albums(self, paths: list):
+        if not self.device_root:
+            QMessageBox.warning(self, "No device", "No PhotoFrame detected.")
+            return
+        dest_base = self._album_root()
+        if not dest_base:
+            QMessageBox.critical(self, "Error", "No ALBUM/Album folder found.")
+            return
+        copied = 0
+        for src in paths:
+            if os.path.isdir(src):
+                dst = os.path.join(dest_base, os.path.basename(src))
+                try:
+                    logging.info("Copy: %s -> %s", src, dst)
+                    shutil.copytree(src, dst, dirs_exist_ok=True)
+                    copied += 1
+                except Exception:
+                    logging.exception("Copy failed: %s", src)
+        self.refresh_all()
+        QMessageBox.information(self, "Done", f"Copied {copied} album folder(s).")
 
-    def rename_path(self, path):
+    # ─── Rename / Delete ──────────────────────────────────────────────────────
+    def rename_path(self, path: str):
         base = os.path.basename(path)
-        new_name = simpledialog.askstring("Rename",
-                                          f"New name for:\n{base}",
-                                          initialvalue=base)
-        if not new_name or new_name == base:
+        new_name, ok = QInputDialog.getText(self, "Rename", f"New name for:\n{base}",
+                                            text=base)
+        if not ok or not new_name or new_name == base:
             return
         new_path = os.path.join(os.path.dirname(path), new_name)
         try:
@@ -863,11 +1102,13 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
             self.refresh_all()
         except Exception:
             logging.exception("Rename failed")
-            messagebox.showerror("Error", "Rename failed. See terminal for details.")
+            QMessageBox.critical(self, "Error", "Rename failed.")
 
-    def delete_path(self, path):
+    def delete_path(self, path: str):
         name = os.path.basename(path)
-        if not messagebox.askyesno("Delete", f"Really delete?\n{name}"):
+        reply = QMessageBox.question(self, "Delete", f"Really delete?\n{name}",
+                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if reply != QMessageBox.StandardButton.Yes:
             return
         try:
             logging.info("Delete: %s", path)
@@ -878,59 +1119,135 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
             self.refresh_all()
         except Exception:
             logging.exception("Delete failed")
-            messagebox.showerror("Error", "Delete failed. See terminal for details.")
+            QMessageBox.critical(self, "Error", "Delete failed.")
 
-    # --- Drag & drop ---
+    # ─── Editor ───────────────────────────────────────────────────────────────
+    def open_image_path(self, path: str):
+        try:
+            self.current_edit_path = path
+            self.editor_original   = Image.open(path)
+            self.editor_original   = ImageOps.exif_transpose(self.editor_original)
+            self.editor_work       = self.editor_original.copy()
+            self.crop_points       = []
+            self.editor_canvas.crop_mode = False
+            self.editor_title_lbl.setText(os.path.basename(path))
+            self.tabs.setCurrentIndex(1)
+            self._refresh_editor_preview()
+            logging.info("Editor opened: %s", path)
+        except Exception:
+            logging.exception("Image open failed")
+            QMessageBox.critical(self, "Image error", "Image could not be opened.")
 
-    def on_drop_album(self, event):
-        if not self.device_root:
-            messagebox.showwarning("No device", "No PhotoFrame detected.")
+    def open_image_file(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Open image", "",
+            "Images (*.jpg *.jpeg *.png *.bmp *.gif *.webp)"
+        )
+        if path:
+            self.open_image_path(path)
+
+    def _refresh_editor_preview(self):
+        if self.editor_work is None:
+            self.editor_canvas.clear()
             return
-        dest_base = self._album_root()
-        if not dest_base:
-            messagebox.showerror("Error", "No ALBUM/Album folder found.")
+        self.editor_canvas.set_image(self.editor_work)
+
+    def rotate_left(self):
+        if self.editor_work:
+            self.editor_work = self.editor_work.rotate(90, expand=True)
+            self._refresh_editor_preview()
+
+    def rotate_right(self):
+        if self.editor_work:
+            self.editor_work = self.editor_work.rotate(-90, expand=True)
+            self._refresh_editor_preview()
+
+    def rotate_custom(self):
+        if not self.editor_work:
             return
-        paths = self._parse_dnd_paths(event.data)
-        copied = 0
-        for src in paths:
-            src = src.strip("{}")
-            if os.path.isdir(src):
-                dst = os.path.join(dest_base, os.path.basename(src))
-                try:
-                    logging.info("Copy: %s -> %s", src, dst)
-                    shutil.copytree(src, dst, dirs_exist_ok=True)
-                    copied += 1
-                except Exception:
-                    logging.exception("Copy failed: %s", src)
-        self.refresh_all()
-        messagebox.showinfo("Done", f"Copied {copied} album folder(s).")
+        angle, ok = QInputDialog.getDouble(self, "Rotate", "Angle in degrees:", 15.0, -360, 360, 1)
+        if ok:
+            self.editor_work = self.editor_work.rotate(-angle, expand=True)
+            self._refresh_editor_preview()
 
-    def _parse_dnd_paths(self, data):
-        return re.findall(r"\{.*?\}|[^\s]+", data)
+    def toggle_crop_mode(self):
+        self.editor_canvas.crop_mode = not self.editor_canvas.crop_mode
+        self.crop_points = []
+        msg = "Crop mode active: click two points." if self.editor_canvas.crop_mode else "Crop mode disabled."
+        QMessageBox.information(self, "Crop", msg)
 
-    # --- Prefs load/save ---
+    def _on_crop_point(self, rx: int, ry: int):
+        self.crop_points.append((rx, ry))
+        if len(self.crop_points) == 2 and self.editor_work:
+            (x1, y1), (x2, y2) = self.crop_points
+            left   = min(x1, x2); upper = min(y1, y2)
+            right  = max(x1, x2); lower = max(y1, y2)
+            if right > left and lower > upper:
+                self.editor_work = self.editor_work.crop((left, upper, right, lower))
+                logging.info("Crop applied: %s", (left, upper, right, lower))
+            self.editor_canvas.crop_mode = False
+            self.crop_points = []
+            self._refresh_editor_preview()
 
+    def reset_editor(self):
+        if self.editor_original:
+            self.editor_work = self.editor_original.copy()
+            self.editor_canvas.crop_mode = False
+            self.crop_points = []
+            self._refresh_editor_preview()
+
+    def save_editor_image(self):
+        if not self.editor_work or not self.current_edit_path:
+            return
+        try:
+            self.editor_work.save(self.current_edit_path)
+            logging.info("Image saved: %s", self.current_edit_path)
+            self.refresh_all()
+            QMessageBox.information(self, "Saved", "Image saved.")
+        except Exception:
+            logging.exception("Save failed")
+            QMessageBox.critical(self, "Error", "Image could not be saved.")
+
+    def save_as_copy(self):
+        if not self.editor_work:
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save as copy", "",
+            "JPEG (*.jpg);;PNG (*.png);;WEBP (*.webp)"
+        )
+        if path:
+            try:
+                self.editor_work.save(path)
+                logging.info("Copy saved: %s", path)
+                QMessageBox.information(self, "Saved", "Copy saved.")
+            except Exception:
+                logging.exception("Copy save failed")
+                QMessageBox.critical(self, "Error", "Copy could not be saved.")
+
+    def rename_current_image(self):
+        if self.current_edit_path:
+            self.rename_path(self.current_edit_path)
+
+    def delete_current_image(self):
+        if self.current_edit_path:
+            self.delete_path(self.current_edit_path)
+
+    # ─── Prefs load/save ──────────────────────────────────────────────────────
     def load_prefs(self):
         if not self.device_root:
             return
-        prefs = os.path.join(self.device_root, ".prefs")
-        if not os.path.exists(prefs):
-            logging.warning(".prefs not found: %s", prefs)
+        prefs_file = os.path.join(self.device_root, ".prefs")
+        if not os.path.exists(prefs_file):
+            logging.warning(".prefs not found: %s", prefs_file)
             return
         try:
-            tree = ET.parse(prefs)
+            tree = ET.parse(prefs_file)
             root = tree.getroot()
             for setup in root.iter("setup"):
-                for key, var in self.prefs_vars.items():
+                for key in self.prefs_widgets:
                     node = setup.find(key)
                     if node is not None and node.text is not None:
-                        var.set(node.text)
-            if self.brightness_scale:
-                try:
-                    self.brightness_scale.set(int(self.prefs_vars["brightness"].get()))
-                except ValueError:
-                    self.brightness_scale.set(255)
-                    self.prefs_vars["brightness"].set("255")
+                        self._prefs_set(key, node.text)
             logging.info(".prefs loaded")
         except Exception:
             logging.exception("Prefs load failed")
@@ -938,35 +1255,34 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
     def save_prefs(self):
         if not self.device_root:
             return
-        prefs = os.path.join(self.device_root, ".prefs")
-        if not os.path.exists(prefs):
-            messagebox.showwarning("Prefs", ".prefs not found on device.")
+        prefs_file = os.path.join(self.device_root, ".prefs")
+        if not os.path.exists(prefs_file):
+            QMessageBox.warning(self, "Prefs", ".prefs not found on device.")
             return
         try:
-            tree = ET.parse(prefs)
+            tree = ET.parse(prefs_file)
             root = tree.getroot()
             for setup in root.iter("setup"):
-                for key, var in self.prefs_vars.items():
+                for key in self.prefs_widgets:
                     node = setup.find(key)
                     if node is not None:
-                        node.text = var.get()
-            tree.write(prefs, encoding="UTF-8", xml_declaration=True)
+                        node.text = self._prefs_get(key)
+            tree.write(prefs_file, encoding="UTF-8", xml_declaration=True)
             logging.info(".prefs saved")
-            messagebox.showinfo("Saved", "Preferences saved.")
+            QMessageBox.information(self, "Saved", "Preferences saved.")
         except Exception:
             logging.exception("Prefs save failed")
-            messagebox.showerror("Error", "Preferences could not be saved. See terminal for details.")
+            QMessageBox.critical(self, "Error", "Preferences could not be saved.")
 
-    # --- RSS ---
-
-    def rss_config_path(self):
+    # ─── RSS ──────────────────────────────────────────────────────────────────
+    def _rss_config_path(self) -> str | None:
         if not self.device_root:
             return None
         return os.path.join(self.device_root, ".config", "rss.cfg")
 
     def load_rss_sources(self):
         self.rss_feeds = []
-        cfg = self.rss_config_path()
+        cfg = self._rss_config_path()
         if not cfg or not os.path.exists(cfg):
             logging.warning("rss.cfg not found")
             self._render_rss_feed_list()
@@ -977,384 +1293,232 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
             for group in root.findall("group"):
                 gname = group.attrib.get("name", "Default")
                 for link in group.findall("link"):
-                    name = link.findtext("name", default="Unnamed")
-                    url = link.findtext("url", default="")
-                    self.rss_feeds.append({"group": gname, "name": name, "url": url})
+                    self.rss_feeds.append({
+                        "group": gname,
+                        "name":  link.findtext("name", "Unnamed"),
+                        "url":   link.findtext("url",  ""),
+                    })
             logging.info("RSS feeds loaded: %s", len(self.rss_feeds))
         except ET.ParseError as e:
-            logging.error("RSS load failed: %s in file %s", e, cfg)
-            messagebox.showwarning("RSS error",
-                                   f"rss.cfg is not valid XML.\nPlease fix the file.\n\nError: {e}")
-            self.rss_feeds = []
+            logging.error("RSS parse error: %s", e)
+            QMessageBox.warning(self, "RSS error", f"rss.cfg is not valid XML.\n\nError: {e}")
         except Exception:
             logging.exception("RSS load failed")
         self._render_rss_feed_list()
 
     def _render_rss_feed_list(self):
-        for w in self.feed_list.winfo_children():
-            w.destroy()
+        self._clear_layout(self.feed_list_layout)
         if not self.rss_feeds:
-            ctk.CTkLabel(self.feed_list, text="No valid RSS feeds loaded")\
-                .pack(padx=10, pady=10)
+            self.feed_list_layout.addWidget(lbl("No valid RSS feeds loaded"))
+            self.feed_list_layout.addStretch()
             return
         for idx, feed in enumerate(self.rss_feeds):
-            row = ctk.CTkFrame(self.feed_list, fg_color="#FFFFFF")
-            row.pack(fill="x", padx=4, pady=4)
-            txt = f"{feed['name']}\n{feed['url']}"
-            ctk.CTkButton(row, text=txt, anchor="w", fg_color="transparent",
-                          text_color="#111111", hover_color="#EAF1FF",
-                          command=lambda i=idx: self.open_rss_feed(i))\
-                .pack(side="left", fill="x", expand=True, padx=(8, 4), pady=6)
-            ctk.CTkButton(row, text="✎", width=34,
-                          command=lambda i=idx: self.edit_rss_feed(i),
-                          fg_color="#0B5ED7").pack(side="left", padx=2)
-            ctk.CTkButton(row, text="🗑", width=34,
-                          command=lambda i=idx: self.remove_rss_feed(i),
-                          fg_color="#C0392B").pack(side="left", padx=(2, 8))
+            row = QFrame()
+            row.setStyleSheet(f"background: {WHITE}; border-radius: 8px;")
+            h = QHBoxLayout(row)
+            h.setContentsMargins(8, 6, 8, 6)
+            txt_btn = QPushButton(f"{feed['name']}\n{feed['url']}")
+            txt_btn.setStyleSheet(
+                "background: transparent; color: #111; text-align: left; "
+                "border: none; font-size: 11px; padding: 2px;"
+            )
+            txt_btn.clicked.connect(lambda _=False, i=idx: self.open_rss_feed(i))
+            h.addWidget(txt_btn, 1)
+            b_ed  = btn("✎", min_w=30)
+            b_del = btn("🗑", RED, min_w=30)
+            b_ed.clicked.connect(lambda _=False, i=idx: self.edit_rss_feed(i))
+            b_del.clicked.connect(lambda _=False, i=idx: self.remove_rss_feed(i))
+            h.addWidget(b_ed)
+            h.addWidget(b_del)
+            self.feed_list_layout.insertWidget(self.feed_list_layout.count() - 1, row)
+        self.feed_list_layout.addStretch()
 
     def add_rss_feed(self):
-        name = simpledialog.askstring("RSS feed", "Name of the new feed:")
-        if not name:
-            return
-        url = simpledialog.askstring("RSS feed", "URL of the new feed:")
-        if not url:
-            return
-        group = simpledialog.askstring("RSS feed", "Group name:", initialvalue="Default") or "Default"
+        name, ok = QInputDialog.getText(self, "RSS feed", "Name of the new feed:")
+        if not ok or not name: return
+        url, ok = QInputDialog.getText(self, "RSS feed", "URL of the new feed:")
+        if not ok or not url:  return
+        group, ok = QInputDialog.getText(self, "RSS feed", "Group name:", text="Default")
+        group = group or "Default"
         self.rss_feeds.append({"group": group, "name": name, "url": url})
         logging.info("RSS added: %s -> %s", name, url)
         self._render_rss_feed_list()
 
-    def edit_rss_feed(self, index):
+    def edit_rss_feed(self, index: int):
         feed = self.rss_feeds[index]
-        name = simpledialog.askstring("RSS feed", "Name:", initialvalue=feed["name"])
-        if not name:
-            return
-        url = simpledialog.askstring("RSS feed", "URL:", initialvalue=feed["url"])
-        if not url:
-            return
-        group = simpledialog.askstring("RSS feed", "Group name:", initialvalue=feed["group"]) or "Default"
+        name, ok = QInputDialog.getText(self, "RSS feed", "Name:", text=feed["name"])
+        if not ok or not name: return
+        url, ok = QInputDialog.getText(self, "RSS feed", "URL:", text=feed["url"])
+        if not ok or not url:  return
+        group, ok = QInputDialog.getText(self, "RSS feed", "Group:", text=feed["group"])
+        group = group or "Default"
         self.rss_feeds[index] = {"group": group, "name": name, "url": url}
-        logging.info("RSS edited: %s", name)
         self._render_rss_feed_list()
 
-    def remove_rss_feed(self, index):
+    def remove_rss_feed(self, index: int):
         feed = self.rss_feeds[index]
-        if messagebox.askyesno("Delete", f"Delete RSS feed?\n{feed['name']}"):
-            logging.info("RSS deleted: %s", feed["name"])
+        reply = QMessageBox.question(self, "Delete", f"Delete RSS feed?\n{feed['name']}",
+                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if reply == QMessageBox.StandardButton.Yes:
             del self.rss_feeds[index]
             self._render_rss_feed_list()
-            self.clear_rss_view()
+            self._clear_rss_view()
 
     def delete_selected_feed(self):
-        if self.rss_selected_index is None:
-            return
-        self.remove_rss_feed(self.rss_selected_index)
-        self.rss_selected_index = None
+        if self.rss_selected_index is not None:
+            self.remove_rss_feed(self.rss_selected_index)
+            self.rss_selected_index = None
 
     def save_rss_feeds(self):
-        cfg = self.rss_config_path()
-        if not cfg:
-            return
+        cfg = self._rss_config_path()
+        if not cfg: return
         try:
             os.makedirs(os.path.dirname(cfg), exist_ok=True)
-            root = ET.Element("list")
+            root   = ET.Element("list")
             groups = {}
             for feed in self.rss_feeds:
                 groups.setdefault(feed["group"], []).append(feed)
-            for group_name, feeds in groups.items():
-                g = ET.SubElement(root, "group", {"name": group_name})
+            for gname, feeds in groups.items():
+                g = ET.SubElement(root, "group", {"name": gname})
                 for feed in feeds:
                     link = ET.SubElement(g, "link")
                     ET.SubElement(link, "name").text = feed["name"]
-                    ET.SubElement(link, "url").text = feed["url"]
+                    ET.SubElement(link, "url").text  = feed["url"]
             ET.ElementTree(root).write(cfg, encoding="UTF-8", xml_declaration=True)
             logging.info("rss.cfg saved: %s", cfg)
-            messagebox.showinfo("Saved", "rss.cfg saved.")
+            QMessageBox.information(self, "Saved", "rss.cfg saved.")
         except Exception:
             logging.exception("RSS save failed")
-            messagebox.showerror("RSS error", "RSS could not be saved. See terminal for details.")
+            QMessageBox.critical(self, "RSS error", "RSS could not be saved.")
 
-    def open_rss_feed(self, index):
+    def open_rss_feed(self, index: int):
         if index < 0 or index >= len(self.rss_feeds):
             return
         self.rss_selected_index = index
         feed = self.rss_feeds[index]
         self.current_rss_feed = feed
-        self.feed_title.configure(text=feed["name"])
-        self.feed_meta.configure(text=feed["url"])
+        self.feed_title_lbl.setText(feed["name"])
+        self.feed_meta_lbl.setText(feed["url"])
         self._render_feed_items(feed["url"])
 
-    def clear_rss_view(self):
-        for w in self.feed_gallery.winfo_children():
-            w.destroy()
-        self.feed_title.configure(text="No feed selected")
-        self.feed_meta.configure(text="")
+    def _clear_rss_view(self):
+        self._clear_grid(self.feed_gallery_layout)
+        self.feed_title_lbl.setText("No feed selected")
+        self.feed_meta_lbl.setText("")
 
-    def _render_feed_items(self, url):
-        for w in self.feed_gallery.winfo_children():
-            w.destroy()
-        self._tk_refs = []
-        data = fetch_url_bytes(url)
-        if not data:
-            ctk.CTkLabel(self.feed_gallery,
-                         text="Feed could not be loaded (URL error).")\
-                .pack(padx=16, pady=16)
-            return
+    def _render_feed_items(self, url: str):
+        self._clear_grid(self.feed_gallery_layout)
+        self.feed_gallery_layout.addWidget(lbl("Loading feed…"), 0, 0)
+        QApplication.processEvents()
+        if self._rss_thread and self._rss_thread.isRunning():
+            self._rss_thread.quit()
+        self._rss_thread = RssFetchThread(url)
+        self._rss_thread.done.connect(self._on_rss_data)
+        self._rss_thread.error.connect(lambda msg: (
+            self._clear_grid(self.feed_gallery_layout),
+            self.feed_gallery_layout.addWidget(lbl(msg, color="#C0392B"), 0, 0)
+        ))
+        self._rss_thread.start()
+
+    def _on_rss_data(self, data: bytes):
+        self._clear_grid(self.feed_gallery_layout)
         try:
-            root = ET.fromstring(data)
+            root  = ET.fromstring(data)
             items = root.findall("./channel/item")
-            logging.info("RSS items found: %s", len(items))
             if not items:
-                ctk.CTkLabel(self.feed_gallery, text="No RSS items found")\
-                    .pack(padx=16, pady=16)
+                self.feed_gallery_layout.addWidget(lbl("No RSS items found"), 0, 0)
                 return
-            grid = ctk.CTkFrame(self.feed_gallery, fg_color="#FFFFFF")
-            grid.pack(fill="both", expand=True)
             for idx, item in enumerate(items):
-                title = item.findtext("title", default=f"Item {idx+1}")
-                desc = item.findtext("description", default="")
+                title     = item.findtext("title", f"Item {idx+1}")
+                desc      = item.findtext("description", "")
                 media_url = None
                 mc = item.find(f"{NS_MEDIA}content")
                 if mc is not None:
                     media_url = mc.attrib.get("url")
                 if not media_url:
                     media_url = parse_image_from_description(desc)
-                self._rss_card(grid, title, desc, media_url, idx)
+                self._add_rss_card(title, desc, media_url, idx)
         except Exception:
             logging.exception("RSS feed parse failed")
-            ctk.CTkLabel(self.feed_gallery,
-                         text="RSS could not be parsed. See terminal for details.")\
-                .pack(padx=16, pady=16)
+            self.feed_gallery_layout.addWidget(
+                lbl("RSS could not be parsed.", color="#C0392B"), 0, 0
+            )
 
-    def _rss_card(self, parent, title, desc, media_url, idx):
-        card = ctk.CTkFrame(parent, fg_color="#F9FAFC", corner_radius=12)
-        card.grid(row=idx // 3, column=idx % 3, padx=10, pady=10, sticky="n")
+    def _add_rss_card(self, title: str, desc: str, media_url: str | None, idx: int):
+        card = QFrame()
+        card.setStyleSheet(f"background: {CARD_BG}; border-radius: 12px;")
+        v = QVBoxLayout(card)
+        v.setContentsMargins(10, 10, 10, 10)
 
-        shown = False
         if media_url and re.search(r"\.(jpg|jpeg|png|bmp|gif|webp)(\?|$)", media_url, re.I):
             data = fetch_url_bytes(media_url)
             if data:
                 try:
                     img = Image.open(io.BytesIO(data))
                     img = ImageOps.exif_transpose(img)
-                    img.thumbnail((self.thumbnail_size, self.thumbnail_size))
-                    photo = ImageTk.PhotoImage(img)
-                    lbl = ctk.CTkLabel(card, image=photo, text="")
-                    lbl.pack(padx=10, pady=(10, 6))
-                    card._img_ref = photo
-                    self._tk_refs.append(photo)
-                    shown = True
+                    px  = pil_to_qpixmap(img, 200, 160)
+                    img_lbl = QLabel()
+                    img_lbl.setPixmap(px)
+                    img_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                    v.addWidget(img_lbl)
                 except Exception:
-                    logging.exception("RSS image load failed: %s", media_url)
+                    pass
 
-        if not shown:
-            ctk.CTkLabel(card, text="No preview image", text_color="#AA0000")\
-                .pack(padx=10, pady=(16, 8))
+        v.addWidget(lbl(title, bold=True, size=12))
+        v.addWidget(lbl(strip_html(desc), size=11, color="#444"))
+        cols = 3
+        self.feed_gallery_layout.addWidget(card, idx // cols, idx % cols)
 
-        ctk.CTkLabel(card, text=title, wraplength=250,
-                     justify="center", font=ctk.CTkFont(size=12, weight="bold"))\
-            .pack(padx=8, pady=(0, 6))
-        ctk.CTkLabel(card, text=strip_html(desc), wraplength=250,
-                     justify="left", text_color="#444444")\
-            .pack(padx=10, pady=(0, 10))
-
-    # --- Editor ---
-
-    def open_image_path(self, path):
-        try:
-            self.current_edit_path = path
-            self.editor_original = Image.open(path)
-            self.editor_original = ImageOps.exif_transpose(self.editor_original)
-            self.editor_work = self.editor_original.copy()
-            self.editor_title.configure(text=os.path.basename(path))
-            self.tabs.set("Editor")
-            self.refresh_editor_preview()
-            logging.info("Editor opened: %s", path)
-        except Exception:
-            logging.exception("Image open failed")
-            messagebox.showerror("Image error",
-                                 "Image could not be opened. See terminal for details.")
-
-    def open_image_file(self):
-        path = filedialog.askopenfilename(
-            filetypes=[("Images", "*.jpg *.jpeg *.png *.bmp *.gif *.webp")]
-        )
-        if path:
-            self.open_image_path(path)
-
-    def refresh_editor_preview(self):
-        if self.editor_work is None:
-            self.editor_canvas.delete("all")
-            return
-        self.editor_canvas.delete("all")
-        preview = self.editor_work.copy()
-        preview.thumbnail((1100, 700))
-        self.editor_photo = ImageTk.PhotoImage(preview)
-        self.editor_image_id = self.editor_canvas.create_image(
-            10, 10, anchor="nw", image=self.editor_photo
-        )
-        self.editor_canvas.config(scrollregion=self.editor_canvas.bbox("all"))
-
-    def rotate_left(self):
-        if self.editor_work is None:
-            return
-        self.editor_work = self.editor_work.rotate(90, expand=True)
-        self.refresh_editor_preview()
-
-    def rotate_right(self):
-        if self.editor_work is None:
-            return
-        self.editor_work = self.editor_work.rotate(-90, expand=True)
-        self.refresh_editor_preview()
-
-    def rotate_custom(self):
-        if self.editor_work is None:
-            return
-        angle = simpledialog.askfloat("Rotate", "Angle in degrees:", initialvalue=15.0)
-        if angle is not None:
-            self.editor_work = self.editor_work.rotate(-angle, expand=True)
-            self.refresh_editor_preview()
-
-    def toggle_crop_mode(self):
-        self.crop_mode = not self.crop_mode
-        self.crop_points = []
-        messagebox.showinfo("Crop",
-                            "Crop mode active: click two points."
-                            if self.crop_mode else "Crop mode disabled.")
-
-    def on_editor_click(self, event):
-        if not self.crop_mode or self.editor_work is None or self.editor_image_id is None:
-            return
-        bbox = self.editor_canvas.bbox(self.editor_image_id)
-        if not bbox:
-            return
-        x0, y0, x1, y1 = bbox
-        img = self.editor_work.copy()
-        img.thumbnail((1100, 700))
-        w, h = img.size
-        if event.x < x0 or event.y < y0 or event.x > x0 + w or event.y > y0 + h:
-            return
-        rx = int((event.x - x0) * self.editor_work.width / w)
-        ry = int((event.y - y0) * self.editor_work.height / h)
-        self.crop_points.append((rx, ry))
-        if len(self.crop_points) == 2:
-            (x1p, y1p), (x2p, y2p) = self.crop_points
-            left = min(x1p, x2p)
-            upper = min(y1p, y2p)
-            right = max(x1p, x2p)
-            lower = max(y1p, y2p)
-            if right > left and lower > upper:
-                self.editor_work = self.editor_work.crop((left, upper, right, lower))
-                logging.info("Crop applied: %s", (left, upper, right, lower))
-            self.crop_mode = False
-            self.crop_points = []
-            self.refresh_editor_preview()
-
-    def reset_editor(self):
-        if self.editor_original is None:
-            return
-        self.editor_work = self.editor_original.copy()
-        self.crop_mode = False
-        self.crop_points = []
-        self.refresh_editor_preview()
-
-    def save_editor_image(self):
-        if self.editor_work is None or not self.current_edit_path:
-            return
-        try:
-            self.editor_work.save(self.current_edit_path)
-            logging.info("Image saved: %s", self.current_edit_path)
-            self.refresh_all()
-            messagebox.showinfo("Saved", "Image saved.")
-        except Exception:
-            logging.exception("Save failed")
-            messagebox.showerror("Error",
-                                 "Image could not be saved. See terminal for details.")
-
-    def save_as_copy(self):
-        if self.editor_work is None:
-            return
-        path = filedialog.asksaveasfilename(
-            defaultextension=".jpg",
-            filetypes=[("JPEG", "*.jpg"), ("PNG", "*.png"), ("WEBP", "*.webp")]
-        )
-        if path:
-            try:
-                self.editor_work.save(path)
-                logging.info("Copy saved: %s", path)
-                messagebox.showinfo("Saved", "Copy saved.")
-            except Exception:
-                logging.exception("Copy save failed")
-                messagebox.showerror("Error", "Copy could not be saved.")
-
-    def rename_current_image(self):
-        if self.current_edit_path:
-            self.rename_path(self.current_edit_path)
-
-    def delete_current_image(self):
-        if self.current_edit_path:
-            self.delete_path(self.current_edit_path)
-
-    # --- Backup / restore ---
-
+    # ─── Backup / restore ─────────────────────────────────────────────────────
     def create_backup(self):
         if not self.device_root:
-            messagebox.showwarning("No device", "No PhotoFrame detected.")
+            QMessageBox.warning(self, "No device", "No PhotoFrame detected.")
             return
-        dest = filedialog.asksaveasfilename(
-            title="Save backup ZIP",
-            defaultextension=".zip",
-            filetypes=[("ZIP archive", "*.zip")],
-            initialfile="philips_backup.zip",
+        dest, _ = QFileDialog.getSaveFileName(
+            self, "Save backup ZIP", "philips_backup.zip", "ZIP archive (*.zip)"
         )
-        if not dest:
-            return
+        if not dest: return
         try:
-            base_name = os.path.splitext(dest)[0]
+            base = os.path.splitext(dest)[0]
             logging.info("Creating backup: root=%s dest=%s", self.device_root, dest)
-            shutil.make_archive(base_name, "zip", self.device_root)
-            messagebox.showinfo("Backup", f"Backup created:\n{dest}")
+            shutil.make_archive(base, "zip", self.device_root)
+            QMessageBox.information(self, "Backup", f"Backup created:\n{dest}")
         except Exception:
             logging.exception("Backup failed")
-            messagebox.showerror("Backup error",
-                                 "Backup could not be created. See terminal for details.")
+            QMessageBox.critical(self, "Backup error", "Backup could not be created.")
 
     def restore_backup(self):
         if not self.device_root:
-            messagebox.showwarning("No device", "No PhotoFrame detected.")
+            QMessageBox.warning(self, "No device", "No PhotoFrame detected.")
             return
-        src = filedialog.askopenfilename(
-            title="Select backup ZIP",
-            filetypes=[("ZIP archive", "*.zip")],
+        src, _ = QFileDialog.getOpenFileName(
+            self, "Select backup ZIP", "", "ZIP archive (*.zip)"
         )
-        if not src:
-            return
-        if not messagebox.askyesno("Restore",
-                                   "Restore backup?\n"
-                                   "Files with the same name will be overwritten."):
+        if not src: return
+        reply = QMessageBox.question(
+            self, "Restore",
+            "Restore backup?\nFiles with the same name will be overwritten.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        if reply != QMessageBox.StandardButton.Yes:
             return
         try:
             logging.info("Restore: %s -> %s", src, self.device_root)
             shutil.unpack_archive(src, self.device_root)
             self.refresh_all()
-            messagebox.showinfo("Restored", "Backup has been restored.")
+            QMessageBox.information(self, "Restored", "Backup has been restored.")
         except Exception:
             logging.exception("Restore failed")
-            messagebox.showerror("Restore error",
-                                 "Backup could not be restored. See terminal for details.")
-
-    # --- Album import ---
+            QMessageBox.critical(self, "Restore error", "Backup could not be restored.")
 
     def import_album_folder(self):
         if not self.device_root:
-            messagebox.showwarning("No device", "No PhotoFrame detected.")
+            QMessageBox.warning(self, "No device", "No PhotoFrame detected.")
             return
-        src = filedialog.askdirectory(title="Select album folder to import")
-        if not src:
-            return
+        src = QFileDialog.getExistingDirectory(self, "Select album folder to import")
+        if not src: return
         dest_base = self._album_root()
-        if not dest_base:
-            return
+        if not dest_base: return
         dst = os.path.join(dest_base, os.path.basename(src))
         try:
             shutil.copytree(src, dst, dirs_exist_ok=True)
@@ -1362,13 +1526,16 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
             self.refresh_all()
         except Exception:
             logging.exception("Import failed")
-            messagebox.showerror("Error", "Album could not be imported.")
+            QMessageBox.critical(self, "Error", "Album could not be imported.")
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Entry point
+# ─────────────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    try:
-        app = App()
-        app.mainloop()
-    except Exception:
-        logging.exception("Unexpected error")
-        raise
+    app = QApplication(sys.argv)
+    app.setApplicationName("Philips PhotoFrame Manager Pro")
+    app.setApplicationVersion(__version__)
+    win = MainWindow()
+    win.show()
+    sys.exit(app.exec())
