@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = "3.2.0"
+__version__ = "3.3.0"
 __build_date__ = "2026-06-15"
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -78,86 +78,85 @@ WHITE      = "#FFFFFF"
 # Prefs: label↔value mappings  (display label → raw XML value)
 # ─────────────────────────────────────────────────────────────────────────────
 PREFS_MAP = {
-    # key: [(display_label, xml_value), ...]
     "twentyfour": [
-        ("12h  (AM/PM)",   "false"),
-        ("24h  (Uhr)",     "true"),
+        ("12h (AM/PM)",  "false"),
+        ("24h (24-hour)","true"),
     ],
     "format": [
-        ("Original (kein Zuschnitt)",   "0"),
-        ("RadiantColor (Farbanpassung)","1"),
-        ("Scale to fit (Ausfüllen)",    "2"),
+        ("Original (no crop)",    "0"),
+        ("RadiantColor (enhance)","1"),
+        ("Scale to fit",          "2"),
     ],
     "sequence": [
-        ("Reihenfolge (geordnet)",  "0"),
-        ("Zufällig (shuffle)",      "1"),
+        ("In order",   "0"),
+        ("Shuffle",    "1"),
     ],
-    # Effekt 0–16 laut DPF-Manual in DE
+    # Effect 0–16 (names from DPF manual, English UI)
     "effect": [
-        ("kein Effekt",             "0"),
-        ("Willkürlich",             "1"),
-        ("Schwenken und zoomen",    "2"),
-        ("Ausblenden",              "3"),
-        ("Collage",                 "4"),
-        ("Stufen",                  "5"),
-        ("Schnecke",                "6"),
-        ("Nach unten schieben",     "7"),
-        ("Nach links schieben",     "8"),
-        ("Nach rechts schieben",    "9"),
-        ("Nach oben schieben",      "10"),
-        ("Schieben Ecke, LO",       "11"),
-        ("Schieben Ecke, RU",       "12"),
-        ("Schieben Ecke, RO",       "13"),
-        ("Schieben Ecke, LU",       "14"),
-        ("Nach links rollen",       "15"),
-        ("Nach oben rollen",        "16"),
+        ("No effect",            "0"),
+        ("Random",               "1"),
+        ("Pan and zoom",         "2"),
+        ("Fade",                 "3"),
+        ("Collage",              "4"),
+        ("Steps",                "5"),
+        ("Spiral",               "6"),
+        ("Slide down",           "7"),
+        ("Slide left",           "8"),
+        ("Slide right",          "9"),
+        ("Slide up",             "10"),
+        ("Slide corner TL",      "11"),
+        ("Slide corner BR",      "12"),
+        ("Slide corner TR",      "13"),
+        ("Slide corner BL",      "14"),
+        ("Roll left",            "15"),
+        ("Roll up",              "16"),
     ],
     "collage": [
-        ("Aus (Off)",  "0"),
-        ("An  (On)",   "1"),
+        ("Off", "0"),
+        ("On",  "1"),
     ],
     "calendar": [
-        ("Woche (Week)",   "0"),
-        ("Monat (Month)",  "1"),
-        ("Uhr  (Clock)",   "2"),
-        ("Kein (None)",    "3"),
+        ("Week",   "0"),
+        ("Month",  "1"),
+        ("Clock",  "2"),
+        ("None",   "3"),
     ],
     "open_at_startup": [
-        ("Aus – manuell starten", "0"),
-        ("An  – auto. starten",  "1"),
+        ("Off – manual start", "0"),
+        ("On  – auto start",   "1"),
     ],
     "auto_on_off": [
-        ("Aus (deaktiviert)",         "0"),
-        ("Zeit (Zeitplan)",           "1"),
-        ("Licht + Zeit (Sensor)",     "2"),
+        ("Off (disabled)",     "0"),
+        ("Time (schedule)",    "1"),
+        ("Light + time",       "2"),
     ],
     "auto_tilt": [
-        ("Aus (manuell)",     "false"),
-        ("An  (automatisch)", "true"),
+        ("Off (manual)",     "false"),
+        ("On  (automatic)",  "true"),
     ],
     "background_color": [
-        ("Schwarz",    "0"),
-        ("Weiß",       "1"),
-        ("Grau",       "2"),
-        ("Automatisch","3"),
+        ("Black",    "0"),
+        ("White",    "1"),
+        ("Gray",     "2"),
+        ("Automatic","3"),
     ],
     "delete_enabled": [
-        ("Löschen deaktiviert", "false"),
-        ("Löschen erlaubt",     "true"),
+        ("Delete disabled", "false"),
+        ("Delete allowed",  "true"),
     ],
     "beep": [
-        ("Kein Ton (stumm)",  "false"),
-        ("Ton  (Beep an)",    "true"),
+        ("No sound", "false"),
+        ("Beep on",  "true"),
     ],
     "demo_mode": [
-        ("Normal (kein Demo)", "false"),
-        ("Demo-Modus an",      "true"),
+        ("Normal",     "false"),
+        ("Demo mode",  "true"),
     ],
     "language_code": [
-        ("Englisch (EN)",   "EN"),
-        ("Deutsch  (DE)",   "DE"),
-        ("Französisch (FR)","FR"),
-        ("Spanisch  (ES)",  "ES"),
+        ("English (EN)",  "EN"),
+        ("Deutsch (DE)",  "DE"),
+        ("Français (FR)", "FR"),
+        ("Español (ES)",  "ES"),
     ],
 }
 
@@ -276,6 +275,7 @@ def lbl(text: str, bold: bool = False, size: int = 13, color: str = "") -> QLabe
 def make_map_combo(key: str, default_raw: str = "") -> QComboBox:
     """Create a QComboBox from PREFS_MAP[key]. Items show display labels."""
     cb = QComboBox()
+    cb.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
     pairs = PREFS_MAP[key]
     for display, _ in pairs:
         cb.addItem(display)
@@ -714,12 +714,12 @@ class MainWindow(QMainWindow):
         form.setSpacing(12)
         form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
-        # ── Section: Sprache & Display ────────────────────────────────────────
-        form.addRow(self._section_label("🌐  Sprache & Display"))
+        # ── Section: Language & Display ───────────────────────────────────────
+        form.addRow(self._section_label("🌐  Language & display"))
 
         cb_lang = make_map_combo("language_code")
         self._prefs["language_code"] = (cb_lang, "map_combo")
-        form.addRow("Sprache:", cb_lang)
+        form.addRow("Language:", cb_lang)
 
         bri_container = QWidget()
         bh = QHBoxLayout(bri_container)
@@ -733,23 +733,23 @@ class MainWindow(QMainWindow):
         sl_bri.valueChanged.connect(lambda v, l=lbl_bri: l.setText(str(v)))
         bh.addWidget(sl_bri)
         bh.addWidget(lbl_bri)
-        bh.addWidget(lbl("(0 = dunkel, 255 = hell)", size=11, color="#888"))
+        bh.addWidget(lbl("(0 = dark, 255 = bright)", size=11, color="#888"))
         bh.addStretch()
         self.brightness_slider  = sl_bri
         self.brightness_val_lbl = lbl_bri
         self._prefs["brightness"] = (sl_bri, "slider")
-        form.addRow("Helligkeit:", bri_container)
+        form.addRow("Brightness:", bri_container)
 
         cb_24h = make_map_combo("twentyfour")
         self._prefs["twentyfour"] = (cb_24h, "map_combo")
-        form.addRow("Uhrzeitformat:", cb_24h)
+        form.addRow("Clock format:", cb_24h)
 
-        # ── Section: Diashow ──────────────────────────────────────────────────
-        form.addRow(self._section_label("🖼  Diashow"))
+        # ── Section: Slideshow ────────────────────────────────────────────────
+        form.addRow(self._section_label("🖼  Slideshow"))
 
         cb_fmt = make_map_combo("format")
         self._prefs["format"] = (cb_fmt, "map_combo")
-        form.addRow("Bildformat:", cb_fmt)
+        form.addRow("Image format:", cb_fmt)
 
         timing_container = QWidget()
         th = QHBoxLayout(timing_container)
@@ -764,15 +764,15 @@ class MainWindow(QMainWindow):
         th.addWidget(sl_tim); th.addWidget(lbl_tim)
         th.addWidget(lbl("(5 s … 3600 s)", size=11, color="#888")); th.addStretch()
         self._prefs["timing"] = (sl_tim, "slider")
-        form.addRow("Intervall:", timing_container)
+        form.addRow("Interval:", timing_container)
 
         cb_seq = make_map_combo("sequence")
         self._prefs["sequence"] = (cb_seq, "map_combo")
-        form.addRow("Reihenfolge:", cb_seq)
+        form.addRow("Order:", cb_seq)
 
         cb_eff = make_map_combo("effect")
         self._prefs["effect"] = (cb_eff, "map_combo")
-        form.addRow("Übergangseffekt:", cb_eff)
+        form.addRow("Transition:", cb_eff)
 
         cb_col = make_map_combo("collage")
         self._prefs["collage"] = (cb_col, "map_combo")
@@ -780,18 +780,18 @@ class MainWindow(QMainWindow):
 
         cb_cal = make_map_combo("calendar")
         self._prefs["calendar"] = (cb_cal, "map_combo")
-        form.addRow("Kalender/Uhr:", cb_cal)
+        form.addRow("Calendar/clock:", cb_cal)
 
-        # ── Section: Ein/Aus-Steuerung ─────────────────────────────────────────
-        form.addRow(self._section_label("⏰  Ein / Aus – Steuerung"))
+        # ── Section: Power control ────────────────────────────────────────────
+        form.addRow(self._section_label("⏰  Power control"))
 
         cb_oast = make_map_combo("open_at_startup")
         self._prefs["open_at_startup"] = (cb_oast, "map_combo")
-        form.addRow("Start beim Einschalten:", cb_oast)
+        form.addRow("Start at power on:", cb_oast)
 
         cb_aoo = make_map_combo("auto_on_off")
         self._prefs["auto_on_off"] = (cb_aoo, "map_combo")
-        form.addRow("Auto Ein/Aus:", cb_aoo)
+        form.addRow("Auto on/off:", cb_aoo)
 
         s_on_c = QWidget()
         so_h = QHBoxLayout(s_on_c)
@@ -803,10 +803,10 @@ class MainWindow(QMainWindow):
         lbl_son.setFixedWidth(28)
         sl_son.valueChanged.connect(lambda v, l=lbl_son: l.setText(str(v)))
         so_h.addWidget(sl_son); so_h.addWidget(lbl_son)
-        so_h.addWidget(lbl("(0 = dunkel, 10 = hell → einschalten)", size=11, color="#888"))
+        so_h.addWidget(lbl("(0 = dark, 10 = bright → turn ON)", size=11, color="#888"))
         so_h.addStretch()
         self._prefs["sensor_on"] = (sl_son, "slider")
-        form.addRow("Sensor Ein (max):", s_on_c)
+        form.addRow("Light sensor ON (max):", s_on_c)
 
         s_off_c = QWidget()
         sof_h = QHBoxLayout(s_off_c)
@@ -818,10 +818,10 @@ class MainWindow(QMainWindow):
         lbl_sof.setFixedWidth(28)
         sl_sof.valueChanged.connect(lambda v, l=lbl_sof: l.setText(str(v)))
         sof_h.addWidget(sl_sof); sof_h.addWidget(lbl_sof)
-        sof_h.addWidget(lbl("(muss kleiner als Sensor Ein sein)", size=11, color="#888"))
+        sof_h.addWidget(lbl("(must be lower than ON)", size=11, color="#888"))
         sof_h.addStretch()
         self._prefs["sensor_off"] = (sl_sof, "slider")
-        form.addRow("Sensor Aus (min):", s_off_c)
+        form.addRow("Light sensor OFF (min):", s_off_c)
 
         te_on = QTimeEdit()
         te_on.setDisplayFormat("HH:mm")
@@ -831,10 +831,10 @@ class MainWindow(QMainWindow):
         te_on_h = QHBoxLayout(te_on_c)
         te_on_h.setContentsMargins(0, 0, 0, 0)
         te_on_h.addWidget(te_on)
-        te_on_h.addWidget(lbl("Uhr (frame schaltet ein)", size=11, color="#888"))
+        te_on_h.addWidget(lbl("frame switches ON", size=11, color="#888"))
         te_on_h.addStretch()
         self._prefs["time_on"] = (te_on, "time")
-        form.addRow("Einschaltzeit:", te_on_c)
+        form.addRow("Power on time:", te_on_c)
 
         te_off = QTimeEdit()
         te_off.setDisplayFormat("HH:mm")
@@ -844,38 +844,37 @@ class MainWindow(QMainWindow):
         te_off_h = QHBoxLayout(te_off_c)
         te_off_h.setContentsMargins(0, 0, 0, 0)
         te_off_h.addWidget(te_off)
-        te_off_h.addWidget(lbl("Uhr (frame schaltet aus)", size=11, color="#888"))
+        te_off_h.addWidget(lbl("frame switches OFF", size=11, color="#888"))
         te_off_h.addStretch()
         self._prefs["time_off"] = (te_off, "time")
-        form.addRow("Ausschaltzeit:", te_off_c)
+        form.addRow("Power off time:", te_off_c)
 
-        # ── Section: Sonstiges ────────────────────────────────────────────────
-        form.addRow(self._section_label("⚙️  Sonstiges"))
+        # ── Section: Misc ─────────────────────────────────────────────────────
+        form.addRow(self._section_label("⚙️  Misc"))
 
         cb_tilt = make_map_combo("auto_tilt")
         self._prefs["auto_tilt"] = (cb_tilt, "map_combo")
-        form.addRow("Auto-Ausrichtung:", cb_tilt)
+        form.addRow("Auto orientation:", cb_tilt)
 
         cb_bg = make_map_combo("background_color")
         self._prefs["background_color"] = (cb_bg, "map_combo")
-        form.addRow("Hintergrundfarbe:", cb_bg)
+        form.addRow("Background color:", cb_bg)
 
         cb_del = make_map_combo("delete_enabled")
         self._prefs["delete_enabled"] = (cb_del, "map_combo")
-        form.addRow("Löschen:", cb_del)
+        form.addRow("Delete from frame:", cb_del)
 
         cb_beep = make_map_combo("beep")
         self._prefs["beep"] = (cb_beep, "map_combo")
-        form.addRow("Ton:", cb_beep)
+        form.addRow("Sound:", cb_beep)
 
         cb_demo = make_map_combo("demo_mode")
         self._prefs["demo_mode"] = (cb_demo, "map_combo")
-        form.addRow("Demo-Modus:", cb_demo)
+        form.addRow("Demo mode:", cb_demo)
 
-        # ── Buttons ───────────────────────────────────────────────────────────
         btn_row = QHBoxLayout()
-        b_load = btn("⬇  Prefs laden")
-        b_save = btn("💾  Prefs speichern")
+        b_load = btn("⬇  Load prefs")
+        b_save = btn("💾  Save prefs")
         b_load.clicked.connect(self.load_prefs)
         b_save.clicked.connect(self.save_prefs)
         btn_row.addWidget(b_load); btn_row.addWidget(b_save)
@@ -997,7 +996,6 @@ class MainWindow(QMainWindow):
         ]:
             b = btn(label); b.clicked.connect(slot); v.addWidget(b)
 
-        # ── Debug buttons ─────────────────────────────────────────────────────
         b_dbg_prefs = btn("🔍  Debug: .prefs anzeigen", color="#5A4FCF")
         b_dbg_rss   = btn("🔍  Debug: rss.cfg anzeigen", color="#5A4FCF")
         b_dbg_prefs.clicked.connect(self.show_prefs_raw)
@@ -1015,26 +1013,38 @@ class MainWindow(QMainWindow):
         return w
 
     # ── Debug viewers ─────────────────────────────────────────────────────────
-    def _show_raw_file(self, filepath: str, title: str):
-        """Open a read-only window showing raw file content + log to terminal."""
-        if not filepath:
-            QMessageBox.warning(self, title, "Kein Gerät verbunden.")
-            return
-        if not os.path.exists(filepath):
-            msg = f"Datei nicht gefunden:\n{filepath}"
-            logging.warning("[Debug] %s – %s", title, msg)
-            QMessageBox.warning(self, title, msg)
-            return
-        try:
-            with open(filepath, "r", encoding="utf-8", errors="replace") as fh:
-                content = fh.read()
-        except Exception as e:
-            msg = f"Fehler beim Lesen:\n{filepath}\n\n{e}"
-            logging.error("[Debug] %s – %s", title, msg)
-            QMessageBox.critical(self, title, msg)
-            return
+    def _current_prefs_as_xml(self) -> str:
+        root = ET.Element("prefs_snapshot")
+        setup = ET.SubElement(root, "setup")
+        for key in sorted(self._prefs.keys()):
+            node = ET.SubElement(setup, key)
+            node.text = self._prefs_get(key)
+        return ET.tostring(root, encoding="unicode")
 
-        logging.info("[Debug] %s (%s):\n%s", title, filepath, content)
+    def _show_raw_file(self, filepath: str, title: str):
+        if not filepath and title == ".prefs":
+            content = self._current_prefs_as_xml()
+            logging.info("[Debug] In-memory prefs snapshot:\n%s", content)
+            source = "In-memory prefs (no device)"
+        else:
+            if not filepath:
+                QMessageBox.warning(self, title, "No device connected.")
+                return
+            if not os.path.exists(filepath):
+                msg = f"File not found:\n{filepath}"
+                logging.warning("[Debug] %s – %s", title, msg)
+                QMessageBox.warning(self, title, msg)
+                return
+            try:
+                with open(filepath, "r", encoding="utf-8", errors="replace") as fh:
+                    content = fh.read()
+            except Exception as e:
+                msg = f"Error reading file:\n{filepath}\n\n{e}"
+                logging.error("[Debug] %s – %s", title, msg)
+                QMessageBox.critical(self, title, msg)
+                return
+            logging.info("[Debug] %s (%s):\n%s", title, filepath, content)
+            source = filepath
 
         dlg = QDialog(self)
         dlg.setWindowTitle(f"Debug – {title}")
@@ -1042,7 +1052,7 @@ class MainWindow(QMainWindow):
         vlay = QVBoxLayout(dlg)
         vlay.setContentsMargins(12, 12, 12, 12)
 
-        info = QLabel(f"<b>{filepath}</b>")
+        info = QLabel(f"<b>{source}</b>")
         info.setWordWrap(True)
         info.setStyleSheet("font-size: 12px; color: #555; padding-bottom: 6px;")
         vlay.addWidget(info)
@@ -1056,7 +1066,7 @@ class MainWindow(QMainWindow):
         )
         vlay.addWidget(te, 1)
 
-        b_close = btn("Schließen", color="#666")
+        b_close = btn("Close", color="#666")
         b_close.clicked.connect(dlg.accept)
         vlay.addWidget(b_close)
 
@@ -1072,9 +1082,7 @@ class MainWindow(QMainWindow):
         if not self.device_root:
             self._show_raw_file("", "rss.cfg")
             return
-        self._show_raw_file(
-            os.path.join(self.device_root, ".config", "rss.cfg"), "rss.cfg"
-        )
+        self._show_raw_file(os.path.join(self.device_root, ".config", "rss.cfg"), "rss.cfg")
 
     # ── Auto detect ───────────────────────────────────────────────────────────
     def _auto_detect_tick(self):
@@ -1526,6 +1534,61 @@ class MainWindow(QMainWindow):
         if not os.path.exists(prefs_file):
             QMessageBox.warning(self, "Prefs", ".prefs not found on device.")
             return
+
+        sensor_on  = int(self._prefs_get("sensor_on") or "0")
+        sensor_off = int(self._prefs_get("sensor_off") or "0")
+        if sensor_on <= sensor_off:
+            QMessageBox.warning(
+                self,
+                "Light sensor",
+                "'ON (max)' must be greater than 'OFF (min)'.\n"
+                "Please adjust the sliders before saving.",
+            )
+            return
+
+        raw_preview = self._current_prefs_as_xml()
+        reply_dbg = QMessageBox.question(
+            self,
+            "Save prefs",
+            "Do you want to inspect the raw prefs before saving?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply_dbg == QMessageBox.StandardButton.Yes:
+            logging.info("[Debug] Raw prefs to be saved:\n%s", raw_preview)
+            dlg = QDialog(self)
+            dlg.setWindowTitle("Prefs – raw preview")
+            dlg.resize(800, 560)
+            vlay = QVBoxLayout(dlg)
+            vlay.setContentsMargins(12, 12, 12, 12)
+            info = QLabel("These are the values that will be written to .prefs.")
+            info.setWordWrap(True)
+            info.setStyleSheet("font-size: 12px; color: #555; padding-bottom: 6px;")
+            vlay.addWidget(info)
+            te = QTextEdit()
+            te.setReadOnly(True)
+            te.setPlainText(raw_preview)
+            te.setStyleSheet(
+                "font-family: 'Courier New', Consolas, monospace; font-size: 13px;"
+                f" background: {WHITE}; border: 1px solid #C8D3E8; border-radius: 6px;"
+            )
+            vlay.addWidget(te, 1)
+            row = QHBoxLayout()
+            b_cancel = btn("Cancel", color="#666")
+            b_ok     = btn("Write .prefs")
+            b_cancel.clicked.connect(dlg.reject)
+            b_ok.clicked.connect(dlg.accept)
+            row.addWidget(b_cancel); row.addWidget(b_ok)
+            vlay.addLayout(row)
+            if dlg.exec() != QDialog.DialogCode.Accepted:
+                return
+
+        backup_path = prefs_file + ".bak"
+        try:
+            shutil.copy2(prefs_file, backup_path)
+            logging.info(".prefs backup created: %s", backup_path)
+        except Exception:
+            logging.exception("Prefs backup failed")
+
         try:
             tree = ET.parse(prefs_file)
             root = tree.getroot()
@@ -1536,7 +1599,7 @@ class MainWindow(QMainWindow):
                         node.text = self._prefs_get(key)
             tree.write(prefs_file, encoding="UTF-8", xml_declaration=True)
             logging.info(".prefs saved")
-            QMessageBox.information(self, "Saved", "Einstellungen gespeichert.")
+            QMessageBox.information(self, "Saved", "Preferences saved.")
         except Exception:
             logging.exception("Prefs save failed")
             QMessageBox.critical(self, "Error", "Preferences could not be saved.")
@@ -1634,6 +1697,13 @@ class MainWindow(QMainWindow):
     def save_rss_feeds(self):
         cfg = self._rss_config_path()
         if not cfg: return
+        backup_path = cfg + ".bak"
+        if os.path.exists(cfg):
+            try:
+                shutil.copy2(cfg, backup_path)
+                logging.info("rss.cfg backup created: %s", backup_path)
+            except Exception:
+                logging.exception("RSS backup failed")
         try:
             os.makedirs(os.path.dirname(cfg), exist_ok=True)
             root   = ET.Element("list")
