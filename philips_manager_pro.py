@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = "3.3.0"
+__version__ = "3.4.0"
 __build_date__ = "2026-06-15"
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -726,7 +726,7 @@ class MainWindow(QMainWindow):
         bh.setContentsMargins(0, 0, 0, 0)
         sl_bri = QSlider(Qt.Orientation.Horizontal)
         sl_bri.setMinimum(0); sl_bri.setMaximum(255)
-        sl_bri.setValue(255)
+        sl_bri.setValue(int(PREFS_DEFAULTS.get("brightness", "255")))
         sl_bri.setFixedWidth(220)
         lbl_bri = QLabel("255")
         lbl_bri.setFixedWidth(36)
@@ -756,9 +756,9 @@ class MainWindow(QMainWindow):
         th.setContentsMargins(0, 0, 0, 0)
         sl_tim = QSlider(Qt.Orientation.Horizontal)
         sl_tim.setMinimum(5); sl_tim.setMaximum(3600)
-        sl_tim.setValue(300)
+        sl_tim.setValue(int(PREFS_DEFAULTS.get("timing", "300")))
         sl_tim.setFixedWidth(220)
-        lbl_tim = QLabel("300 s")
+        lbl_tim = QLabel(f'{PREFS_DEFAULTS.get("timing", "300")} s')
         lbl_tim.setFixedWidth(60)
         sl_tim.valueChanged.connect(lambda v, l=lbl_tim: l.setText(f"{v} s"))
         th.addWidget(sl_tim); th.addWidget(lbl_tim)
@@ -790,14 +790,16 @@ class MainWindow(QMainWindow):
         form.addRow("Start at power on:", cb_oast)
 
         cb_aoo = make_map_combo("auto_on_off")
+        self.cb_auto_on_off = cb_aoo
         self._prefs["auto_on_off"] = (cb_aoo, "map_combo")
+        cb_aoo.currentIndexChanged.connect(self._update_auto_on_off_widgets)
         form.addRow("Auto on/off:", cb_aoo)
 
         s_on_c = QWidget()
         so_h = QHBoxLayout(s_on_c)
         so_h.setContentsMargins(0, 0, 0, 0)
         sl_son = QSlider(Qt.Orientation.Horizontal)
-        sl_son.setMinimum(0); sl_son.setMaximum(10); sl_son.setValue(10)
+        sl_son.setMinimum(0); sl_son.setMaximum(10); sl_son.setValue(int(PREFS_DEFAULTS.get("sensor_on", "10")))
         sl_son.setFixedWidth(160)
         lbl_son = QLabel("10")
         lbl_son.setFixedWidth(28)
@@ -812,7 +814,7 @@ class MainWindow(QMainWindow):
         sof_h = QHBoxLayout(s_off_c)
         sof_h.setContentsMargins(0, 0, 0, 0)
         sl_sof = QSlider(Qt.Orientation.Horizontal)
-        sl_sof.setMinimum(0); sl_sof.setMaximum(10); sl_sof.setValue(4)
+        sl_sof.setMinimum(0); sl_sof.setMaximum(10); sl_sof.setValue(int(PREFS_DEFAULTS.get("sensor_off", "4")))
         sl_sof.setFixedWidth(160)
         lbl_sof = QLabel("4")
         lbl_sof.setFixedWidth(28)
@@ -825,7 +827,7 @@ class MainWindow(QMainWindow):
 
         te_on = QTimeEdit()
         te_on.setDisplayFormat("HH:mm")
-        te_on.setTime(minutes_to_qtime(420))
+        te_on.setTime(minutes_to_qtime(int(PREFS_DEFAULTS.get("time_on", "420"))))
         te_on.setFixedWidth(100)
         te_on_c = QWidget()
         te_on_h = QHBoxLayout(te_on_c)
@@ -838,7 +840,7 @@ class MainWindow(QMainWindow):
 
         te_off = QTimeEdit()
         te_off.setDisplayFormat("HH:mm")
-        te_off.setTime(minutes_to_qtime(1020))
+        te_off.setTime(minutes_to_qtime(int(PREFS_DEFAULTS.get("time_off", "1020"))))
         te_off.setFixedWidth(100)
         te_off_c = QWidget()
         te_off_h = QHBoxLayout(te_off_c)
@@ -882,6 +884,7 @@ class MainWindow(QMainWindow):
 
         scroll.setWidget(inner)
         ov.addWidget(scroll)
+        self._update_auto_on_off_widgets()
         return outer
 
     @staticmethod
@@ -1013,11 +1016,19 @@ class MainWindow(QMainWindow):
         return w
 
     # ── Debug viewers ─────────────────────────────────────────────────────────
+    # Fixed key order matching real .prefs file
+    _PREFS_KEY_ORDER = [
+        "language_code", "brightness", "twentyfour", "format", "timing",
+        "sequence", "effect", "collage", "calendar", "open_at_startup",
+        "auto_on_off", "sensor_on", "sensor_off", "time_on", "time_off",
+        "auto_tilt", "background_color", "delete_enabled", "beep", "demo_mode",
+    ]
+
     def _current_prefs_as_xml(self) -> str:
-        root = ET.Element("prefs_snapshot")
+        root  = ET.Element("plist")
         setup = ET.SubElement(root, "setup")
-        for key in sorted(self._prefs.keys()):
-            node = ET.SubElement(setup, key)
+        for key in self._PREFS_KEY_ORDER:
+            node      = ET.SubElement(setup, key)
             node.text = self._prefs_get(key)
         return ET.tostring(root, encoding="unicode")
 
@@ -1524,8 +1535,21 @@ class MainWindow(QMainWindow):
                     if node is not None and node.text is not None:
                         self._prefs_set(key, node.text)
             logging.info(".prefs loaded")
+            self._update_auto_on_off_widgets()
         except Exception:
             logging.exception("Prefs load failed")
+
+    def _update_auto_on_off_widgets(self):
+        """Enable/disable sensor and time widgets based on auto_on_off value."""
+        raw = combo_get_raw("auto_on_off", self.cb_auto_on_off)
+        sensors_on = raw == "2"
+        times_on   = raw in ("1", "2")
+        for key in ("sensor_on", "sensor_off"):
+            w, _ = self._prefs[key]
+            w.setEnabled(sensors_on)
+        for key in ("time_on", "time_off"):
+            w, _ = self._prefs[key]
+            w.setEnabled(times_on)
 
     def save_prefs(self):
         if not self.device_root:
@@ -1535,16 +1559,18 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Prefs", ".prefs not found on device.")
             return
 
-        sensor_on  = int(self._prefs_get("sensor_on") or "0")
-        sensor_off = int(self._prefs_get("sensor_off") or "0")
-        if sensor_on <= sensor_off:
-            QMessageBox.warning(
-                self,
-                "Light sensor",
-                "'ON (max)' must be greater than 'OFF (min)'.\n"
-                "Please adjust the sliders before saving.",
-            )
-            return
+        # Sensor plausibility check – only relevant when Light+time mode active
+        if self._prefs_get("auto_on_off") == "2":
+            sensor_on  = int(self._prefs_get("sensor_on") or "0")
+            sensor_off = int(self._prefs_get("sensor_off") or "0")
+            if sensor_on <= sensor_off:
+                QMessageBox.warning(
+                    self,
+                    "Light sensor values invalid",
+                    f"Light sensor ON ({sensor_on}) must be strictly greater than "
+                    f"sensor OFF ({sensor_off}).\n\nPlease correct the values before saving.",
+                )
+                return
 
         raw_preview = self._current_prefs_as_xml()
         reply_dbg = QMessageBox.question(
