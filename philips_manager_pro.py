@@ -47,7 +47,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QGridLayout, QFormLayout,
     QLabel, QPushButton, QSlider, QComboBox, QLineEdit,
     QTextEdit, QSizePolicy, QMessageBox, QInputDialog,
-    QFileDialog, QTimeEdit,
+    QFileDialog, QTimeEdit, QDialog,
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -467,7 +467,7 @@ class MainWindow(QMainWindow):
 
         # Prefs widgets registry
         # Each entry: (widget, kind)
-        # kind: "map_combo" | "slider" | "time"
+        # kind: "map_combo" | "slider" | "time" | "sensor_slider" | "line"
         self._prefs: dict[str, tuple] = {}
 
         # extra refs for brightness
@@ -714,7 +714,7 @@ class MainWindow(QMainWindow):
         form.setSpacing(12)
         form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
-        # 1) Sprache & Display
+        # ── Section: Sprache & Display ────────────────────────────────────────
         form.addRow(self._section_label("🌐  Sprache & Display"))
 
         cb_lang = make_map_combo("language_code")
@@ -728,10 +728,13 @@ class MainWindow(QMainWindow):
         sl_bri.setMinimum(0); sl_bri.setMaximum(255)
         sl_bri.setValue(255)
         sl_bri.setFixedWidth(220)
-        lbl_bri = QLabel("255"); lbl_bri.setFixedWidth(36)
+        lbl_bri = QLabel("255")
+        lbl_bri.setFixedWidth(36)
         sl_bri.valueChanged.connect(lambda v, l=lbl_bri: l.setText(str(v)))
-        bh.addWidget(sl_bri); bh.addWidget(lbl_bri)
-        bh.addWidget(lbl("(0 = dunkel, 255 = hell)", size=11, color="#888")); bh.addStretch()
+        bh.addWidget(sl_bri)
+        bh.addWidget(lbl_bri)
+        bh.addWidget(lbl("(0 = dunkel, 255 = hell)", size=11, color="#888"))
+        bh.addStretch()
         self.brightness_slider  = sl_bri
         self.brightness_val_lbl = lbl_bri
         self._prefs["brightness"] = (sl_bri, "slider")
@@ -741,7 +744,7 @@ class MainWindow(QMainWindow):
         self._prefs["twentyfour"] = (cb_24h, "map_combo")
         form.addRow("Uhrzeitformat:", cb_24h)
 
-        # 2) Diashow
+        # ── Section: Diashow ──────────────────────────────────────────────────
         form.addRow(self._section_label("🖼  Diashow"))
 
         cb_fmt = make_map_combo("format")
@@ -755,7 +758,8 @@ class MainWindow(QMainWindow):
         sl_tim.setMinimum(5); sl_tim.setMaximum(3600)
         sl_tim.setValue(300)
         sl_tim.setFixedWidth(220)
-        lbl_tim = QLabel("300 s"); lbl_tim.setFixedWidth(60)
+        lbl_tim = QLabel("300 s")
+        lbl_tim.setFixedWidth(60)
         sl_tim.valueChanged.connect(lambda v, l=lbl_tim: l.setText(f"{v} s"))
         th.addWidget(sl_tim); th.addWidget(lbl_tim)
         th.addWidget(lbl("(5 s … 3600 s)", size=11, color="#888")); th.addStretch()
@@ -778,7 +782,7 @@ class MainWindow(QMainWindow):
         self._prefs["calendar"] = (cb_cal, "map_combo")
         form.addRow("Kalender/Uhr:", cb_cal)
 
-        # 3) Ein/Aus-Steuerung
+        # ── Section: Ein/Aus-Steuerung ─────────────────────────────────────────
         form.addRow(self._section_label("⏰  Ein / Aus – Steuerung"))
 
         cb_oast = make_map_combo("open_at_startup")
@@ -789,59 +793,91 @@ class MainWindow(QMainWindow):
         self._prefs["auto_on_off"] = (cb_aoo, "map_combo")
         form.addRow("Auto Ein/Aus:", cb_aoo)
 
-        s_on_c = QWidget(); so_h = QHBoxLayout(s_on_c); so_h.setContentsMargins(0, 0, 0, 0)
-        sl_son = QSlider(Qt.Orientation.Horizontal); sl_son.setMinimum(0); sl_son.setMaximum(10)
-        sl_son.setValue(10); sl_son.setFixedWidth(160)
-        lbl_son = QLabel("10"); lbl_son.setFixedWidth(28)
+        s_on_c = QWidget()
+        so_h = QHBoxLayout(s_on_c)
+        so_h.setContentsMargins(0, 0, 0, 0)
+        sl_son = QSlider(Qt.Orientation.Horizontal)
+        sl_son.setMinimum(0); sl_son.setMaximum(10); sl_son.setValue(10)
+        sl_son.setFixedWidth(160)
+        lbl_son = QLabel("10")
+        lbl_son.setFixedWidth(28)
         sl_son.valueChanged.connect(lambda v, l=lbl_son: l.setText(str(v)))
         so_h.addWidget(sl_son); so_h.addWidget(lbl_son)
-        so_h.addWidget(lbl("(0 = dunkel, 10 = hell → einschalten)", size=11, color="#888")); so_h.addStretch()
+        so_h.addWidget(lbl("(0 = dunkel, 10 = hell → einschalten)", size=11, color="#888"))
+        so_h.addStretch()
         self._prefs["sensor_on"] = (sl_son, "slider")
         form.addRow("Sensor Ein (max):", s_on_c)
 
-        s_off_c = QWidget(); sof_h = QHBoxLayout(s_off_c); sof_h.setContentsMargins(0, 0, 0, 0)
-        sl_sof = QSlider(Qt.Orientation.Horizontal); sl_sof.setMinimum(0); sl_sof.setMaximum(10)
-        sl_sof.setValue(4); sl_sof.setFixedWidth(160)
-        lbl_sof = QLabel("4"); lbl_sof.setFixedWidth(28)
+        s_off_c = QWidget()
+        sof_h = QHBoxLayout(s_off_c)
+        sof_h.setContentsMargins(0, 0, 0, 0)
+        sl_sof = QSlider(Qt.Orientation.Horizontal)
+        sl_sof.setMinimum(0); sl_sof.setMaximum(10); sl_sof.setValue(4)
+        sl_sof.setFixedWidth(160)
+        lbl_sof = QLabel("4")
+        lbl_sof.setFixedWidth(28)
         sl_sof.valueChanged.connect(lambda v, l=lbl_sof: l.setText(str(v)))
         sof_h.addWidget(sl_sof); sof_h.addWidget(lbl_sof)
-        sof_h.addWidget(lbl("(muss kleiner als Sensor Ein sein)", size=11, color="#888")); sof_h.addStretch()
+        sof_h.addWidget(lbl("(muss kleiner als Sensor Ein sein)", size=11, color="#888"))
+        sof_h.addStretch()
         self._prefs["sensor_off"] = (sl_sof, "slider")
         form.addRow("Sensor Aus (min):", s_off_c)
 
-        te_on = QTimeEdit(); te_on.setDisplayFormat("HH:mm"); te_on.setTime(minutes_to_qtime(420)); te_on.setFixedWidth(100)
-        te_on_c = QWidget(); te_on_h = QHBoxLayout(te_on_c); te_on_h.setContentsMargins(0, 0, 0, 0)
-        te_on_h.addWidget(te_on); te_on_h.addWidget(lbl("Uhr (frame schaltet ein)", size=11, color="#888")); te_on_h.addStretch()
+        te_on = QTimeEdit()
+        te_on.setDisplayFormat("HH:mm")
+        te_on.setTime(minutes_to_qtime(420))
+        te_on.setFixedWidth(100)
+        te_on_c = QWidget()
+        te_on_h = QHBoxLayout(te_on_c)
+        te_on_h.setContentsMargins(0, 0, 0, 0)
+        te_on_h.addWidget(te_on)
+        te_on_h.addWidget(lbl("Uhr (frame schaltet ein)", size=11, color="#888"))
+        te_on_h.addStretch()
         self._prefs["time_on"] = (te_on, "time")
         form.addRow("Einschaltzeit:", te_on_c)
 
-        te_off = QTimeEdit(); te_off.setDisplayFormat("HH:mm"); te_off.setTime(minutes_to_qtime(1020)); te_off.setFixedWidth(100)
-        te_off_c = QWidget(); te_off_h = QHBoxLayout(te_off_c); te_off_h.setContentsMargins(0, 0, 0, 0)
-        te_off_h.addWidget(te_off); te_off_h.addWidget(lbl("Uhr (frame schaltet aus)", size=11, color="#888")); te_off_h.addStretch()
+        te_off = QTimeEdit()
+        te_off.setDisplayFormat("HH:mm")
+        te_off.setTime(minutes_to_qtime(1020))
+        te_off.setFixedWidth(100)
+        te_off_c = QWidget()
+        te_off_h = QHBoxLayout(te_off_c)
+        te_off_h.setContentsMargins(0, 0, 0, 0)
+        te_off_h.addWidget(te_off)
+        te_off_h.addWidget(lbl("Uhr (frame schaltet aus)", size=11, color="#888"))
+        te_off_h.addStretch()
         self._prefs["time_off"] = (te_off, "time")
         form.addRow("Ausschaltzeit:", te_off_c)
 
-        # 4) Sonstiges
+        # ── Section: Sonstiges ────────────────────────────────────────────────
         form.addRow(self._section_label("⚙️  Sonstiges"))
 
-        cb_tilt = make_map_combo("auto_tilt"); self._prefs["auto_tilt"] = (cb_tilt, "map_combo")
+        cb_tilt = make_map_combo("auto_tilt")
+        self._prefs["auto_tilt"] = (cb_tilt, "map_combo")
         form.addRow("Auto-Ausrichtung:", cb_tilt)
 
-        cb_bg = make_map_combo("background_color"); self._prefs["background_color"] = (cb_bg, "map_combo")
+        cb_bg = make_map_combo("background_color")
+        self._prefs["background_color"] = (cb_bg, "map_combo")
         form.addRow("Hintergrundfarbe:", cb_bg)
 
-        cb_del = make_map_combo("delete_enabled"); self._prefs["delete_enabled"] = (cb_del, "map_combo")
+        cb_del = make_map_combo("delete_enabled")
+        self._prefs["delete_enabled"] = (cb_del, "map_combo")
         form.addRow("Löschen:", cb_del)
 
-        cb_beep = make_map_combo("beep"); self._prefs["beep"] = (cb_beep, "map_combo")
+        cb_beep = make_map_combo("beep")
+        self._prefs["beep"] = (cb_beep, "map_combo")
         form.addRow("Ton:", cb_beep)
 
-        cb_demo = make_map_combo("demo_mode"); self._prefs["demo_mode"] = (cb_demo, "map_combo")
+        cb_demo = make_map_combo("demo_mode")
+        self._prefs["demo_mode"] = (cb_demo, "map_combo")
         form.addRow("Demo-Modus:", cb_demo)
 
+        # ── Buttons ───────────────────────────────────────────────────────────
         btn_row = QHBoxLayout()
-        b_load = btn("⬇  Prefs laden"); b_save = btn("💾  Prefs speichern")
-        b_load.clicked.connect(self.load_prefs); b_save.clicked.connect(self.save_prefs)
+        b_load = btn("⬇  Prefs laden")
+        b_save = btn("💾  Prefs speichern")
+        b_load.clicked.connect(self.load_prefs)
+        b_save.clicked.connect(self.save_prefs)
         btn_row.addWidget(b_load); btn_row.addWidget(b_save)
         form.addRow(btn_row)
 
@@ -881,7 +917,8 @@ class MainWindow(QMainWindow):
             combo_set_raw(key, widget, value)
         elif kind == "slider":
             try:
-                v = int(float(value)); widget.setValue(v)
+                v = int(float(value))
+                widget.setValue(v)
                 if key == "brightness" and self.brightness_val_lbl:
                     self.brightness_val_lbl.setText(str(v))
             except ValueError:
@@ -892,54 +929,65 @@ class MainWindow(QMainWindow):
             except ValueError:
                 pass
 
-    # ── RSS tab (unverändert außer Debug später) ─────────────────────────────
+    # ── RSS tab ───────────────────────────────────────────────────────────────
     def _build_rss_tab(self) -> QWidget:
         w = QWidget()
         h = QHBoxLayout(w)
         h.setContentsMargins(12, 12, 12, 12)
         h.setSpacing(12)
 
-        left = QFrame(); left.setFixedWidth(290)
+        left = QFrame()
+        left.setFixedWidth(290)
         left.setStyleSheet(f"background: {PANEL_BG}; border-radius: 12px;")
-        lv = QVBoxLayout(left); lv.setContentsMargins(12, 12, 12, 12)
+        lv = QVBoxLayout(left)
+        lv.setContentsMargins(12, 12, 12, 12)
         lv.addWidget(lbl("RSS feeds", bold=True, size=14))
 
-        rb = QHBoxLayout(); ba = btn("Add feed"); bs = btn("Save feeds")
-        ba.clicked.connect(self.add_rss_feed); bs.clicked.connect(self.save_rss_feeds)
-        rb.addWidget(ba); rb.addWidget(bs); lv.addLayout(rb)
+        rb = QHBoxLayout()
+        ba = btn("Add feed"); bs = btn("Save feeds")
+        ba.clicked.connect(self.add_rss_feed)
+        bs.clicked.connect(self.save_rss_feeds)
+        rb.addWidget(ba); rb.addWidget(bs)
+        lv.addLayout(rb)
 
-        self.feed_list_widget = QWidget(); self.feed_list_layout = QVBoxLayout(self.feed_list_widget)
-        self.feed_list_layout.setSpacing(4); self.feed_list_layout.setContentsMargins(0, 0, 0, 0)
+        self.feed_list_widget = QWidget()
+        self.feed_list_layout = QVBoxLayout(self.feed_list_widget)
+        self.feed_list_layout.setSpacing(4)
+        self.feed_list_layout.setContentsMargins(0, 0, 0, 0)
         self.feed_list_layout.addStretch()
         sf = QScrollArea(); sf.setWidget(self.feed_list_widget); sf.setWidgetResizable(True)
         lv.addWidget(sf, 1)
 
         br = btn("Reload feeds"); bd = btn("Delete feed", RED)
-        br.clicked.connect(self.load_rss_sources); bd.clicked.connect(self.delete_selected_feed)
+        br.clicked.connect(self.load_rss_sources)
+        bd.clicked.connect(self.delete_selected_feed)
         lv.addWidget(br); lv.addWidget(bd)
         h.addWidget(left)
 
-        right = QFrame(); right.setStyleSheet(f"background: {WHITE}; border-radius: 12px;")
-        rv = QVBoxLayout(right); rv.setContentsMargins(12, 12, 12, 12)
+        right = QFrame()
+        right.setStyleSheet(f"background: {WHITE}; border-radius: 12px;")
+        rv = QVBoxLayout(right)
+        rv.setContentsMargins(12, 12, 12, 12)
         self.feed_title_lbl = lbl("No feed selected", bold=True, size=16)
         self.feed_meta_lbl  = lbl("", color="#666")
-        rv.addWidget(self.feed_title_lbl); rv.addWidget(self.feed_meta_lbl)
+        rv.addWidget(self.feed_title_lbl)
+        rv.addWidget(self.feed_meta_lbl)
 
-        self.feed_gallery_widget = QWidget(); self.feed_gallery_layout = QGridLayout(self.feed_gallery_widget)
+        self.feed_gallery_widget = QWidget()
+        self.feed_gallery_layout = QGridLayout(self.feed_gallery_widget)
         self.feed_gallery_layout.setSpacing(10)
         sg = QScrollArea(); sg.setWidget(self.feed_gallery_widget); sg.setWidgetResizable(True)
         rv.addWidget(sg, 1)
         h.addWidget(right, 1)
         return w
 
-    # ── Tools tab + Debug Viewer ─────────────────────────────────────────────
+    # ── Tools tab ─────────────────────────────────────────────────────────────
     def _build_tools_tab(self) -> QWidget:
         w = QWidget()
         v = QVBoxLayout(w)
         v.setContentsMargins(20, 20, 20, 20)
         v.setSpacing(10)
         v.addWidget(lbl("Device and folder statistics", bold=True, size=18))
-
         for label, slot in [
             ("Reload everything",   self.refresh_all),
             ("Scan device",         self.scan_device),
@@ -949,65 +997,793 @@ class MainWindow(QMainWindow):
         ]:
             b = btn(label); b.clicked.connect(slot); v.addWidget(b)
 
-        # Debug-Buttons
-        dbg_row = QHBoxLayout()
-        b_dbg_prefs = btn("Debug: .prefs anzeigen")
-        b_dbg_rss   = btn("Debug: rss.cfg anzeigen")
+        # ── Debug buttons ─────────────────────────────────────────────────────
+        b_dbg_prefs = btn("🔍  Debug: .prefs anzeigen", color="#5A4FCF")
+        b_dbg_rss   = btn("🔍  Debug: rss.cfg anzeigen", color="#5A4FCF")
         b_dbg_prefs.clicked.connect(self.show_prefs_raw)
         b_dbg_rss.clicked.connect(self.show_rss_raw)
-        dbg_row.addWidget(b_dbg_prefs); dbg_row.addWidget(b_dbg_rss)
-        v.addLayout(dbg_row)
+        v.addWidget(b_dbg_prefs)
+        v.addWidget(b_dbg_rss)
 
-        b_exit = btn("Exit", RED); b_exit.clicked.connect(self.close); v.addWidget(b_exit)
-
-        self.stats_box = QTextEdit(); self.stats_box.setReadOnly(True)
+        bx = btn("Exit", RED)
+        bx.clicked.connect(self.close)
+        v.addWidget(bx)
+        self.stats_box = QTextEdit()
+        self.stats_box.setReadOnly(True)
         self.stats_box.setStyleSheet(f"background: {WHITE}; border-radius: 8px; font-family: monospace;")
         v.addWidget(self.stats_box, 1)
         return w
 
-    # ── Debug helper: raw file view ──────────────────────────────────────────
-    def _show_raw_file(self, title: str, path: str):
-        if not path or not os.path.exists(path):
-            QMessageBox.warning(self, title, f"Datei nicht gefunden:\n{path}")
+    # ── Debug viewers ─────────────────────────────────────────────────────────
+    def _show_raw_file(self, filepath: str, title: str):
+        """Open a read-only window showing raw file content + log to terminal."""
+        if not filepath:
+            QMessageBox.warning(self, title, "Kein Gerät verbunden.")
+            return
+        if not os.path.exists(filepath):
+            msg = f"Datei nicht gefunden:\n{filepath}"
+            logging.warning("[Debug] %s – %s", title, msg)
+            QMessageBox.warning(self, title, msg)
             return
         try:
-            with open(path, "r", encoding="utf-8", errors="replace") as f:
-                content = f.read()
+            with open(filepath, "r", encoding="utf-8", errors="replace") as fh:
+                content = fh.read()
         except Exception as e:
-            QMessageBox.critical(self, title, f"Konnte Datei nicht lesen:\n{e}")
+            msg = f"Fehler beim Lesen:\n{filepath}\n\n{e}"
+            logging.error("[Debug] %s – %s", title, msg)
+            QMessageBox.critical(self, title, msg)
             return
-        dlg = QMessageBox(self)
-        dlg.setWindowTitle(title)
-        dlg.setIcon(QMessageBox.Icon.Information)
-        # Hinweis auf Terminal-Logs
-        dlg.setText(f"Dies ist eine schreibgeschützte Ansicht von {os.path.basename(path)}.\n"
-                    f"Details werden zusätzlich im Terminal geloggt.")
-        # Textfeld
-        tb = QTextEdit(); tb.setReadOnly(True); tb.setPlainText(content)
-        tb.setMinimumSize(600, 400)
-        dlg.layout().addWidget(tb, 1, 0, 1, dlg.layout().columnCount())
-        logging.info("[DEBUG] Raw view for %s:\n%s", path, content)
+
+        logging.info("[Debug] %s (%s):\n%s", title, filepath, content)
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle(f"Debug – {title}")
+        dlg.resize(800, 560)
+        vlay = QVBoxLayout(dlg)
+        vlay.setContentsMargins(12, 12, 12, 12)
+
+        info = QLabel(f"<b>{filepath}</b>")
+        info.setWordWrap(True)
+        info.setStyleSheet("font-size: 12px; color: #555; padding-bottom: 6px;")
+        vlay.addWidget(info)
+
+        te = QTextEdit()
+        te.setReadOnly(True)
+        te.setPlainText(content)
+        te.setStyleSheet(
+            "font-family: 'Courier New', Consolas, monospace; font-size: 13px;"
+            f" background: {WHITE}; border: 1px solid #C8D3E8; border-radius: 6px;"
+        )
+        vlay.addWidget(te, 1)
+
+        b_close = btn("Schließen", color="#666")
+        b_close.clicked.connect(dlg.accept)
+        vlay.addWidget(b_close)
+
         dlg.exec()
 
     def show_prefs_raw(self):
         if not self.device_root:
-            QMessageBox.warning(self, "Debug .prefs", "Kein Gerät verbunden.")
+            self._show_raw_file("", ".prefs")
             return
-        prefs_file = os.path.join(self.device_root, ".prefs")
-        self._show_raw_file("Debug: .prefs", prefs_file)
+        self._show_raw_file(os.path.join(self.device_root, ".prefs"), ".prefs")
 
     def show_rss_raw(self):
-        cfg = self._rss_config_path()
-        if not cfg:
-            QMessageBox.warning(self, "Debug rss.cfg", "Kein Gerät verbunden.")
+        if not self.device_root:
+            self._show_raw_file("", "rss.cfg")
             return
-        self._show_raw_file("Debug: rss.cfg", cfg)
+        self._show_raw_file(
+            os.path.join(self.device_root, ".config", "rss.cfg"), "rss.cfg"
+        )
 
-    # ── Auto detect / scan / stats / albums / editor / prefs / rss / backup  ─
-    # (Rest identisch zu deiner aktuellen Version 3.1.0 – wegen Platz hier gekürzt)
-    # Du hast weiterhin dieselbe Logik für scan_device, refresh_all, load_prefs,
-    # save_prefs, RSS, Backup usw. – nur ergänzt um die neuen Debug-Funktionen
-    # und die aktualisierten Effekt-Namen.
+    # ── Auto detect ───────────────────────────────────────────────────────────
+    def _auto_detect_tick(self):
+        try:
+            self.scan_device(silent=True)
+        except Exception:
+            logging.exception("Auto-detect error")
+
+    def manual_select_device(self):
+        path = QFileDialog.getExistingDirectory(self, "Select PhotoFrame device folder")
+        if not path:
+            return
+        self.device_root = path
+        self.status_lbl.setText("Device (manual) connected")
+        self.status_lbl.setStyleSheet(f"color: {GREEN};")
+        self.path_lbl.setText(f"Path: {path}")
+        self.refresh_all()
+
+    def scan_device(self, silent: bool = False):
+        try:
+            found   = self._find_device_root()
+            changed = found != self.device_root
+            self.device_root = found
+            if found:
+                self.status_lbl.setText("Device connected")
+                self.status_lbl.setStyleSheet(f"color: {GREEN};")
+                self.path_lbl.setText(f"Path: {found}")
+                self._update_storage_info()
+                self._update_album_info()
+                if changed:
+                    logging.info("Device detected: %s", found)
+                    self.refresh_all()
+            else:
+                self.status_lbl.setText("No device connected")
+                self.status_lbl.setStyleSheet("color: #8A8A8A;")
+                self.path_lbl.setText("Path: -")
+                self.storage_lbl.setText("Storage: -")
+                self.album_info_lbl.setText("Albums: -")
+                if changed:
+                    logging.info("Device disconnected")
+                    self._clear_album_view()
+            if not silent and not found:
+                QMessageBox.warning(self, "Device not found",
+                                    "No Philips PhotoFrame mountpoint detected.")
+        except Exception:
+            logging.exception("Scan error")
+
+    def _find_device_root(self) -> str | None:
+        candidates = []
+        try:
+            for part in psutil.disk_partitions(all=False):
+                mp = part.mountpoint
+                if not mp or not os.path.isdir(mp):
+                    continue
+                score = 0
+                if os.path.exists(os.path.join(mp, ".prefs")):             score += 3
+                if os.path.exists(os.path.join(mp, ".config", "rss.cfg")): score += 2
+                if os.path.isdir(os.path.join(mp, "ALBUM")):               score += 4
+                if os.path.isdir(os.path.join(mp, "Album")):               score += 4
+                if score > 0:
+                    candidates.append((score, mp))
+        except Exception:
+            logging.exception("disk_partitions failed")
+        if not candidates:
+            return None
+        candidates.sort(key=lambda x: (x[0], x[1]), reverse=True)
+        return candidates[0][1]
+
+    # ── Refresh ───────────────────────────────────────────────────────────────
+    def refresh_all(self):
+        self.refresh_album_list()
+        self.load_prefs()
+        self.load_rss_sources()
+        self._update_storage_info()
+        self._update_album_info()
+        self.refresh_album_view()
+        self._refresh_stats()
+
+    def _update_storage_info(self):
+        if not self.device_root:
+            return
+        try:
+            u = shutil.disk_usage(self.device_root)
+            self.storage_lbl.setText(
+                f"Storage: free {human_size(u.free)} / total {human_size(u.total)}"
+            )
+        except Exception:
+            logging.exception("Storage info failed")
+
+    def _album_root(self) -> str | None:
+        if not self.device_root:
+            return None
+        for folder in ("ALBUM", "Album"):
+            p = os.path.join(self.device_root, folder)
+            if os.path.isdir(p):
+                return p
+        p = os.path.join(self.device_root, "ALBUM")
+        try:
+            os.makedirs(p, exist_ok=True)
+            return p
+        except Exception:
+            return None
+
+    def _update_album_info(self):
+        root = self._album_root()
+        if not root:
+            self.album_info_lbl.setText("Albums: -")
+            return
+        try:
+            albums = [os.path.join(root, d) for d in sorted(os.listdir(root))
+                      if os.path.isdir(os.path.join(root, d))]
+            total = sum(
+                len([x for x in os.listdir(p)
+                     if os.path.splitext(x)[1].lower() in IMAGE_EXTS
+                     and os.path.isfile(os.path.join(p, x))])
+                for p in albums
+            )
+            self.album_info_lbl.setText(f"Albums: {len(albums)} folders · {total} images")
+        except Exception:
+            logging.exception("Album info failed")
+
+    def _refresh_stats(self):
+        if not self.device_root:
+            return
+        root = self._album_root()
+        if not root:
+            return
+        lines = [f"Device: {self.device_root}", f"Build: {__version__} / {__build_date__}", ""]
+        try:
+            for d in sorted(os.listdir(root)):
+                p = os.path.join(root, d)
+                if os.path.isdir(p):
+                    files, subdirs, size = dir_stats(p)
+                    ic = len([x for x in os.listdir(p)
+                              if os.path.splitext(x)[1].lower() in IMAGE_EXTS
+                              and os.path.isfile(os.path.join(p, x))])
+                    lines.append(f"{d}: {ic} images, {files} files, "
+                                 f"{subdirs} subfolders, {human_size(size)}")
+        except Exception:
+            logging.exception("Stats failed")
+        self.stats_box.setPlainText("\n".join(lines))
+
+    # ── Albums ────────────────────────────────────────────────────────────────
+    def _clear_layout(self, layout):
+        while layout.count() > 0:
+            item = layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+    def _clear_grid(self, layout):
+        while layout.count() > 0:
+            item = layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+    def _clear_album_view(self):
+        self._clear_layout(self.album_list_layout)
+        self._clear_grid(self.image_area_layout)
+        self.album_title_lbl.setText("No album selected")
+        self.page_info_lbl.setText("Page 0/0")
+        self.album_items_current = []
+        self.current_album_path  = None
+        self.current_album_name  = None
+        self.album_page = 0
+
+    def refresh_album_list(self):
+        self._clear_layout(self.album_list_layout)
+        if not self.device_root:
+            self.album_list_layout.addWidget(lbl("No device detected"))
+            self.album_list_layout.addStretch()
+            return
+        root_dir = self._album_root()
+        if not root_dir:
+            self.album_list_layout.addWidget(lbl("No ALBUM/Album folder found"))
+            self.album_list_layout.addStretch()
+            return
+        albums = []
+        try:
+            for name in sorted(os.listdir(root_dir)):
+                full = os.path.join(root_dir, name)
+                if os.path.isdir(full):
+                    files, _, size = dir_stats(full)
+                    ic = len([x for x in os.listdir(full)
+                              if os.path.splitext(x)[1].lower() in IMAGE_EXTS
+                              and os.path.isfile(os.path.join(full, x))])
+                    albums.append((name, full, ic, human_size(size)))
+        except Exception:
+            logging.exception("Failed to read album list")
+        if not albums:
+            self.album_list_layout.addWidget(lbl("No albums found"))
+            self.album_list_layout.addStretch()
+            return
+        for name, full, ic, size in albums:
+            self._add_album_row(name, full, ic, size)
+        self.album_list_layout.addStretch()
+
+    def _add_album_row(self, name: str, path: str, img_count: int, size: str):
+        row = QFrame()
+        row.setStyleSheet(f"background: {WHITE}; border-radius: 8px;")
+        h = QHBoxLayout(row)
+        h.setContentsMargins(8, 6, 8, 6)
+        tb = QPushButton(f"{name}\n{img_count} images · {size}")
+        tb.setStyleSheet(
+            "background: transparent; color: #111; text-align: left; "
+            "border: none; font-size: 12px; padding: 2px;"
+        )
+        tb.clicked.connect(lambda _=False, p=path, n=name: self.open_album(p, n))
+        h.addWidget(tb, 1)
+        br = btn("✎", min_w=30)
+        bd = btn("🗑", RED, min_w=30)
+        br.clicked.connect(lambda _=False, p=path: self.rename_path(p))
+        bd.clicked.connect(lambda _=False, p=path: self.delete_path(p))
+        h.addWidget(br); h.addWidget(bd)
+        self.album_list_layout.insertWidget(self.album_list_layout.count() - 1, row)
+
+    def open_album(self, path: str, name: str):
+        self.current_album_path = path
+        self.current_album_name = name
+        self.album_page = 0
+        logging.info("Album opened: %s", path)
+        self.album_title_lbl.setText(name)
+        self.album_loading_lbl.setText("Loading album…")
+        QApplication.processEvents()
+        self.refresh_album_view()
+        self.album_loading_lbl.setText("")
+
+    def refresh_album_view(self):
+        self._clear_grid(self.image_area_layout)
+        if not self.current_album_path or not os.path.isdir(self.current_album_path):
+            return
+        try:
+            files = [f for f in sorted(os.listdir(self.current_album_path))
+                     if os.path.splitext(f)[1].lower() in IMAGE_EXTS]
+            total = len(files)
+            self.album_items_current = files
+            pages = max(1, (total + self.album_page_size - 1) // self.album_page_size)
+            if self.album_page >= pages:
+                self.album_page = max(0, pages - 1)
+            start = self.album_page * self.album_page_size
+            view  = files[start: start + self.album_page_size]
+            self.page_info_lbl.setText(f"Page {self.album_page + 1}/{pages} · {total} images")
+            if not view:
+                self.image_area_layout.addWidget(lbl("No images found"), 0, 0)
+                return
+            cols = 4
+            for idx, filename in enumerate(view):
+                path = os.path.join(self.current_album_path, filename)
+                card = ImageCard(path, filename, self.thumbnail_size)
+                card.edit_requested.connect(self.open_image_path)
+                card.rename_requested.connect(self.rename_path)
+                card.delete_requested.connect(self.delete_path)
+                self.image_area_layout.addWidget(card, idx // cols, idx % cols)
+        except Exception:
+            logging.exception("Album view failed")
+            QMessageBox.critical(self, "Error", "Album could not be loaded.")
+
+    def prev_page(self):
+        if self.current_album_path and self.album_page > 0:
+            self.album_page -= 1
+            self.refresh_album_view()
+
+    def next_page(self):
+        if not self.current_album_path:
+            return
+        total = len(self.album_items_current)
+        pages = max(1, (total + self.album_page_size - 1) // self.album_page_size)
+        if self.album_page + 1 < pages:
+            self.album_page += 1
+            self.refresh_album_view()
+
+    def _on_drop_albums(self, paths: list):
+        if not self.device_root:
+            QMessageBox.warning(self, "No device", "No PhotoFrame detected.")
+            return
+        dest_base = self._album_root()
+        if not dest_base:
+            QMessageBox.critical(self, "Error", "No ALBUM/Album folder found.")
+            return
+        copied = 0
+        for src in paths:
+            if os.path.isdir(src):
+                dst = os.path.join(dest_base, os.path.basename(src))
+                try:
+                    shutil.copytree(src, dst, dirs_exist_ok=True)
+                    copied += 1
+                except Exception:
+                    logging.exception("Copy failed: %s", src)
+        self.refresh_all()
+        QMessageBox.information(self, "Done", f"Copied {copied} album folder(s).")
+
+    # ── Rename / Delete ───────────────────────────────────────────────────────
+    def rename_path(self, path: str):
+        base = os.path.basename(path)
+        new_name, ok = QInputDialog.getText(self, "Rename", f"New name for:\n{base}", text=base)
+        if not ok or not new_name or new_name == base:
+            return
+        new_path = os.path.join(os.path.dirname(path), new_name)
+        try:
+            os.rename(path, new_path)
+            self.refresh_all()
+        except Exception:
+            logging.exception("Rename failed")
+            QMessageBox.critical(self, "Error", "Rename failed.")
+
+    def delete_path(self, path: str):
+        name = os.path.basename(path)
+        reply = QMessageBox.question(self, "Delete", f"Really delete?\n{name}",
+                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            if os.path.isdir(path):
+                shutil.rmtree(path)
+            else:
+                os.remove(path)
+            self.refresh_all()
+        except Exception:
+            logging.exception("Delete failed")
+            QMessageBox.critical(self, "Error", "Delete failed.")
+
+    # ── Editor ────────────────────────────────────────────────────────────────
+    def open_image_path(self, path: str):
+        try:
+            self.current_edit_path       = path
+            self.editor_original         = Image.open(path)
+            self.editor_original         = ImageOps.exif_transpose(self.editor_original)
+            self.editor_work             = self.editor_original.copy()
+            self.crop_points             = []
+            self.editor_canvas.crop_mode = False
+            self.editor_title_lbl.setText(os.path.basename(path))
+            self.tabs.setCurrentIndex(1)
+            self._refresh_editor_preview()
+        except Exception:
+            logging.exception("Image open failed")
+            QMessageBox.critical(self, "Image error", "Image could not be opened.")
+
+    def open_image_file(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Open image", "",
+            "Images (*.jpg *.jpeg *.png *.bmp *.gif *.webp)"
+        )
+        if path:
+            self.open_image_path(path)
+
+    def _refresh_editor_preview(self):
+        if self.editor_work:
+            self.editor_canvas.set_image(self.editor_work)
+
+    def rotate_left(self):
+        if self.editor_work:
+            self.editor_work = self.editor_work.rotate(90, expand=True)
+            self._refresh_editor_preview()
+
+    def rotate_right(self):
+        if self.editor_work:
+            self.editor_work = self.editor_work.rotate(-90, expand=True)
+            self._refresh_editor_preview()
+
+    def rotate_custom(self):
+        if not self.editor_work:
+            return
+        angle, ok = QInputDialog.getDouble(self, "Rotate", "Angle in degrees:", 15.0, -360, 360, 1)
+        if ok:
+            self.editor_work = self.editor_work.rotate(-angle, expand=True)
+            self._refresh_editor_preview()
+
+    def toggle_crop_mode(self):
+        self.editor_canvas.crop_mode = not self.editor_canvas.crop_mode
+        self.crop_points = []
+        msg = ("Crop mode active: click two points."
+               if self.editor_canvas.crop_mode else "Crop mode disabled.")
+        QMessageBox.information(self, "Crop", msg)
+
+    def _on_crop_point(self, rx: int, ry: int):
+        self.crop_points.append((rx, ry))
+        if len(self.crop_points) == 2 and self.editor_work:
+            (x1, y1), (x2, y2) = self.crop_points
+            left = min(x1, x2); upper = min(y1, y2)
+            right = max(x1, x2); lower = max(y1, y2)
+            if right > left and lower > upper:
+                self.editor_work = self.editor_work.crop((left, upper, right, lower))
+            self.editor_canvas.crop_mode = False
+            self.crop_points = []
+            self._refresh_editor_preview()
+
+    def reset_editor(self):
+        if self.editor_original:
+            self.editor_work             = self.editor_original.copy()
+            self.editor_canvas.crop_mode = False
+            self.crop_points             = []
+            self._refresh_editor_preview()
+
+    def save_editor_image(self):
+        if not self.editor_work or not self.current_edit_path:
+            return
+        try:
+            self.editor_work.save(self.current_edit_path)
+            self.refresh_all()
+            QMessageBox.information(self, "Saved", "Image saved.")
+        except Exception:
+            logging.exception("Save failed")
+            QMessageBox.critical(self, "Error", "Image could not be saved.")
+
+    def save_as_copy(self):
+        if not self.editor_work:
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save as copy", "", "JPEG (*.jpg);;PNG (*.png);;WEBP (*.webp)"
+        )
+        if path:
+            try:
+                self.editor_work.save(path)
+                QMessageBox.information(self, "Saved", "Copy saved.")
+            except Exception:
+                QMessageBox.critical(self, "Error", "Copy could not be saved.")
+
+    def rename_current_image(self):
+        if self.current_edit_path:
+            self.rename_path(self.current_edit_path)
+
+    def delete_current_image(self):
+        if self.current_edit_path:
+            self.delete_path(self.current_edit_path)
+
+    # ── Prefs load / save ─────────────────────────────────────────────────────
+    def load_prefs(self):
+        if not self.device_root:
+            return
+        prefs_file = os.path.join(self.device_root, ".prefs")
+        if not os.path.exists(prefs_file):
+            logging.warning(".prefs not found: %s", prefs_file)
+            return
+        try:
+            tree = ET.parse(prefs_file)
+            root = tree.getroot()
+            for setup in root.iter("setup"):
+                for key in self._prefs:
+                    node = setup.find(key)
+                    if node is not None and node.text is not None:
+                        self._prefs_set(key, node.text)
+            logging.info(".prefs loaded")
+        except Exception:
+            logging.exception("Prefs load failed")
+
+    def save_prefs(self):
+        if not self.device_root:
+            return
+        prefs_file = os.path.join(self.device_root, ".prefs")
+        if not os.path.exists(prefs_file):
+            QMessageBox.warning(self, "Prefs", ".prefs not found on device.")
+            return
+        try:
+            tree = ET.parse(prefs_file)
+            root = tree.getroot()
+            for setup in root.iter("setup"):
+                for key in self._prefs:
+                    node = setup.find(key)
+                    if node is not None:
+                        node.text = self._prefs_get(key)
+            tree.write(prefs_file, encoding="UTF-8", xml_declaration=True)
+            logging.info(".prefs saved")
+            QMessageBox.information(self, "Saved", "Einstellungen gespeichert.")
+        except Exception:
+            logging.exception("Prefs save failed")
+            QMessageBox.critical(self, "Error", "Preferences could not be saved.")
+
+    # ── RSS ───────────────────────────────────────────────────────────────────
+    def _rss_config_path(self) -> str | None:
+        if not self.device_root:
+            return None
+        return os.path.join(self.device_root, ".config", "rss.cfg")
+
+    def load_rss_sources(self):
+        self.rss_feeds = []
+        cfg = self._rss_config_path()
+        if not cfg or not os.path.exists(cfg):
+            logging.warning("rss.cfg not found")
+            self._render_rss_feed_list()
+            return
+        try:
+            tree = ET.parse(cfg)
+            root = tree.getroot()
+            for group in root.findall("group"):
+                gname = group.attrib.get("name", "Default")
+                for link in group.findall("link"):
+                    self.rss_feeds.append({
+                        "group": gname,
+                        "name":  link.findtext("name", "Unnamed"),
+                        "url":   link.findtext("url", ""),
+                    })
+        except ET.ParseError as e:
+            logging.error("RSS parse error: %s", e)
+            QMessageBox.warning(self, "RSS error", f"rss.cfg is not valid XML.\n\nError: {e}")
+        except Exception:
+            logging.exception("RSS load failed")
+        self._render_rss_feed_list()
+
+    def _render_rss_feed_list(self):
+        self._clear_layout(self.feed_list_layout)
+        if not self.rss_feeds:
+            self.feed_list_layout.addWidget(lbl("No valid RSS feeds loaded"))
+            self.feed_list_layout.addStretch()
+            return
+        for idx, feed in enumerate(self.rss_feeds):
+            row = QFrame()
+            row.setStyleSheet(f"background: {WHITE}; border-radius: 8px;")
+            h = QHBoxLayout(row)
+            h.setContentsMargins(8, 6, 8, 6)
+            tb = QPushButton(f"{feed['name']}\n{feed['url']}")
+            tb.setStyleSheet(
+                "background: transparent; color: #111; text-align: left; "
+                "border: none; font-size: 11px; padding: 2px;"
+            )
+            tb.clicked.connect(lambda _=False, i=idx: self.open_rss_feed(i))
+            h.addWidget(tb, 1)
+            be = btn("✎", min_w=30)
+            bd = btn("🗑", RED, min_w=30)
+            be.clicked.connect(lambda _=False, i=idx: self.edit_rss_feed(i))
+            bd.clicked.connect(lambda _=False, i=idx: self.remove_rss_feed(i))
+            h.addWidget(be); h.addWidget(bd)
+            self.feed_list_layout.insertWidget(self.feed_list_layout.count() - 1, row)
+        self.feed_list_layout.addStretch()
+
+    def add_rss_feed(self):
+        name,  ok = QInputDialog.getText(self, "RSS feed", "Name of the new feed:")
+        if not ok or not name: return
+        url,   ok = QInputDialog.getText(self, "RSS feed", "URL of the new feed:")
+        if not ok or not url:  return
+        group, ok = QInputDialog.getText(self, "RSS feed", "Group name:", text="Default")
+        self.rss_feeds.append({"group": group or "Default", "name": name, "url": url})
+        self._render_rss_feed_list()
+
+    def edit_rss_feed(self, index: int):
+        feed = self.rss_feeds[index]
+        name,  ok = QInputDialog.getText(self, "RSS feed", "Name:", text=feed["name"])
+        if not ok or not name: return
+        url,   ok = QInputDialog.getText(self, "RSS feed", "URL:",  text=feed["url"])
+        if not ok or not url:  return
+        group, ok = QInputDialog.getText(self, "RSS feed", "Group:", text=feed["group"])
+        self.rss_feeds[index] = {"group": group or "Default", "name": name, "url": url}
+        self._render_rss_feed_list()
+
+    def remove_rss_feed(self, index: int):
+        feed  = self.rss_feeds[index]
+        reply = QMessageBox.question(self, "Delete", f"Delete RSS feed?\n{feed['name']}",
+                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if reply == QMessageBox.StandardButton.Yes:
+            del self.rss_feeds[index]
+            self._render_rss_feed_list()
+            self._clear_rss_view()
+
+    def delete_selected_feed(self):
+        if self.rss_selected_index is not None:
+            self.remove_rss_feed(self.rss_selected_index)
+            self.rss_selected_index = None
+
+    def save_rss_feeds(self):
+        cfg = self._rss_config_path()
+        if not cfg: return
+        try:
+            os.makedirs(os.path.dirname(cfg), exist_ok=True)
+            root   = ET.Element("list")
+            groups = {}
+            for feed in self.rss_feeds:
+                groups.setdefault(feed["group"], []).append(feed)
+            for gname, feeds in groups.items():
+                g = ET.SubElement(root, "group", {"name": gname})
+                for feed in feeds:
+                    link = ET.SubElement(g, "link")
+                    ET.SubElement(link, "name").text = feed["name"]
+                    ET.SubElement(link, "url").text  = feed["url"]
+            ET.ElementTree(root).write(cfg, encoding="UTF-8", xml_declaration=True)
+            QMessageBox.information(self, "Saved", "rss.cfg saved.")
+        except Exception:
+            logging.exception("RSS save failed")
+            QMessageBox.critical(self, "RSS error", "RSS could not be saved.")
+
+    def open_rss_feed(self, index: int):
+        if index < 0 or index >= len(self.rss_feeds):
+            return
+        self.rss_selected_index = index
+        feed = self.rss_feeds[index]
+        self.current_rss_feed = feed
+        self.feed_title_lbl.setText(feed["name"])
+        self.feed_meta_lbl.setText(feed["url"])
+        self._render_feed_items(feed["url"])
+
+    def _clear_rss_view(self):
+        self._clear_grid(self.feed_gallery_layout)
+        self.feed_title_lbl.setText("No feed selected")
+        self.feed_meta_lbl.setText("")
+
+    def _render_feed_items(self, url: str):
+        self._clear_grid(self.feed_gallery_layout)
+        self.feed_gallery_layout.addWidget(lbl("Loading feed…"), 0, 0)
+        QApplication.processEvents()
+        if self._rss_thread and self._rss_thread.isRunning():
+            self._rss_thread.quit()
+        self._rss_thread = RssFetchThread(url)
+        self._rss_thread.done.connect(self._on_rss_data)
+        self._rss_thread.error.connect(
+            lambda msg: (
+                self._clear_grid(self.feed_gallery_layout),
+                self.feed_gallery_layout.addWidget(lbl(msg, color=RED), 0, 0),
+            )
+        )
+        self._rss_thread.start()
+
+    def _on_rss_data(self, data: bytes):
+        self._clear_grid(self.feed_gallery_layout)
+        try:
+            root  = ET.fromstring(data)
+            items = root.findall("./channel/item")
+            if not items:
+                self.feed_gallery_layout.addWidget(lbl("No RSS items found"), 0, 0)
+                return
+            for idx, item in enumerate(items):
+                title     = item.findtext("title", f"Item {idx+1}")
+                desc      = item.findtext("description", "")
+                media_url = None
+                mc = item.find(f"{NS_MEDIA}content")
+                if mc is not None:
+                    media_url = mc.attrib.get("url")
+                if not media_url:
+                    media_url = parse_image_from_description(desc)
+                self._add_rss_card(title, desc, media_url, idx)
+        except Exception:
+            logging.exception("RSS feed parse failed")
+            self.feed_gallery_layout.addWidget(
+                lbl("RSS could not be parsed.", color=RED), 0, 0
+            )
+
+    def _add_rss_card(self, title: str, desc: str, media_url: str | None, idx: int):
+        card = QFrame()
+        card.setStyleSheet(f"background: {CARD_BG}; border-radius: 12px;")
+        v = QVBoxLayout(card)
+        v.setContentsMargins(10, 10, 10, 10)
+        if media_url and re.search(r"\.(jpg|jpeg|png|bmp|gif|webp)(\?|$)", media_url, re.I):
+            data = fetch_url_bytes(media_url)
+            if data:
+                try:
+                    img = Image.open(io.BytesIO(data))
+                    img = ImageOps.exif_transpose(img)
+                    px  = pil_to_qpixmap(img, 200, 160)
+                    il  = QLabel(); il.setPixmap(px)
+                    il.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                    v.addWidget(il)
+                except Exception:
+                    pass
+        v.addWidget(lbl(title, bold=True, size=12))
+        v.addWidget(lbl(strip_html(desc), size=11, color="#444"))
+        cols = 3
+        self.feed_gallery_layout.addWidget(card, idx // cols, idx % cols)
+
+    # ── Backup / restore ──────────────────────────────────────────────────────
+    def create_backup(self):
+        if not self.device_root:
+            QMessageBox.warning(self, "No device", "No PhotoFrame detected.")
+            return
+        dest, _ = QFileDialog.getSaveFileName(
+            self, "Save backup ZIP", "philips_backup.zip", "ZIP archive (*.zip)"
+        )
+        if not dest: return
+        try:
+            base = os.path.splitext(dest)[0]
+            shutil.make_archive(base, "zip", self.device_root)
+            QMessageBox.information(self, "Backup", f"Backup created:\n{dest}")
+        except Exception:
+            logging.exception("Backup failed")
+            QMessageBox.critical(self, "Backup error", "Backup could not be created.")
+
+    def restore_backup(self):
+        if not self.device_root:
+            QMessageBox.warning(self, "No device", "No PhotoFrame detected.")
+            return
+        src, _ = QFileDialog.getOpenFileName(
+            self, "Select backup ZIP", "", "ZIP archive (*.zip)"
+        )
+        if not src: return
+        reply = QMessageBox.question(
+            self, "Restore",
+            "Restore backup?\nFiles with the same name will be overwritten.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            shutil.unpack_archive(src, self.device_root)
+            self.refresh_all()
+            QMessageBox.information(self, "Restored", "Backup has been restored.")
+        except Exception:
+            logging.exception("Restore failed")
+            QMessageBox.critical(self, "Restore error", "Backup could not be restored.")
+
+    def import_album_folder(self):
+        if not self.device_root:
+            QMessageBox.warning(self, "No device", "No PhotoFrame detected.")
+            return
+        src = QFileDialog.getExistingDirectory(self, "Select album folder to import")
+        if not src: return
+        dest_base = self._album_root()
+        if not dest_base: return
+        dst = os.path.join(dest_base, os.path.basename(src))
+        try:
+            shutil.copytree(src, dst, dirs_exist_ok=True)
+            self.refresh_all()
+        except Exception:
+            logging.exception("Import failed")
+            QMessageBox.critical(self, "Error", "Album could not be imported.")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
