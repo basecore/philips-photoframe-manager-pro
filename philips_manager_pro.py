@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = "3.0.0"
+__version__ = "3.1.0"
 __build_date__ = "2026-06-15"
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -11,15 +11,14 @@ import importlib.util
 import os
 
 REQUIRED = [
-    ("psutil",   "psutil"),
-    ("PIL",      "Pillow"),
-    ("PySide6",  "PySide6"),
+    ("psutil",  "psutil"),
+    ("PIL",     "Pillow"),
+    ("PySide6", "PySide6"),
 ]
 
 def _pip_install(pkg):
     print(f"Installing missing package: {pkg} …")
-    cmd = [sys.executable, "-m", "pip", "install", "--break-system-packages", pkg]
-    subprocess.check_call(cmd)
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "--break-system-packages", pkg])
 
 for _mod, _pkg in REQUIRED:
     if importlib.util.find_spec(_mod) is None:
@@ -36,25 +35,19 @@ import logging
 import urllib.request
 import urllib.error
 import xml.etree.ElementTree as ET
-from pathlib import Path
 
 import psutil
 from PIL import Image, ImageOps
 
-from PySide6.QtCore import (
-    Qt, QTimer, QThread, Signal, QSize, QPoint, QRect,
-)
-from PySide6.QtGui import (
-    QPixmap, QImage, QFont, QColor, QPalette, QIcon,
-    QPainter, QPen, QBrush, QAction,
-)
+from PySide6.QtCore  import Qt, QTimer, QThread, Signal, QTime
+from PySide6.QtGui   import QPixmap, QImage
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QSplitter,
     QTabWidget, QScrollArea, QFrame,
     QVBoxLayout, QHBoxLayout, QGridLayout, QFormLayout,
     QLabel, QPushButton, QSlider, QComboBox, QLineEdit,
     QTextEdit, QSizePolicy, QMessageBox, QInputDialog,
-    QFileDialog, QScrollBar, QSpacerItem,
+    QFileDialog, QTimeEdit,
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -80,6 +73,116 @@ SIDEBAR_BG = "#FFFFFF"
 CARD_BG    = "#F9FAFC"
 PANEL_BG   = "#F6F7FB"
 WHITE      = "#FFFFFF"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Prefs: label↔value mappings  (display label → raw XML value)
+# ─────────────────────────────────────────────────────────────────────────────
+PREFS_MAP = {
+    # key: [(display_label, xml_value), ...]
+    "twentyfour": [
+        ("12h  (AM/PM)",   "false"),
+        ("24h  (Uhr)",     "true"),
+    ],
+    "format": [
+        ("Original (kein Zuschnitt)",   "0"),
+        ("RadiantColor (Farbanpassung)","1"),
+        ("Scale to fit (Ausfüllen)",    "2"),
+    ],
+    "sequence": [
+        ("Reihenfolge (geordnet)",  "0"),
+        ("Zufällig (shuffle)",      "1"),
+    ],
+    "effect": [
+        ("Kein Übergang (sofort)",   "0"),
+        ("Fade (Überblenden)",       "1"),
+        ("Slide von links",          "2"),
+        ("Slide von rechts",         "3"),
+        ("Slide von oben",           "4"),
+        ("Slide von unten",          "5"),
+        ("Zoom herein",              "6"),
+        ("Zoom heraus",              "7"),
+        ("Spirale",                  "8"),
+        ("Fliegen (fly in)",         "9"),
+        ("Wischen",                  "10"),
+        ("Jalousie",                 "11"),
+        ("Würfel",                   "12"),
+        ("Schachbrett",              "13"),
+        ("Wellen",                   "14"),
+        ("Zufällig",                 "15"),
+        ("Alle Effekte",             "16"),
+    ],
+    "collage": [
+        ("Aus (Off)",  "0"),
+        ("An  (On)",   "1"),
+    ],
+    "calendar": [
+        ("Woche (Week)",   "0"),
+        ("Monat (Month)",  "1"),
+        ("Uhr  (Clock)",   "2"),
+        ("Kein (None)",    "3"),
+    ],
+    "open_at_startup": [
+        ("Aus – manuell starten", "0"),
+        ("An  – auto. starten",  "1"),
+    ],
+    "auto_on_off": [
+        ("Aus (deaktiviert)",         "0"),
+        ("Zeit (Zeitplan)",           "1"),
+        ("Licht + Zeit (Sensor)",     "2"),
+    ],
+    "auto_tilt": [
+        ("Aus (manuell)",     "false"),
+        ("An  (automatisch)", "true"),
+    ],
+    "background_color": [
+        ("Schwarz",    "0"),
+        ("Weiß",       "1"),
+        ("Grau",       "2"),
+        ("Automatisch","3"),
+    ],
+    "delete_enabled": [
+        ("Löschen deaktiviert", "false"),
+        ("Löschen erlaubt",     "true"),
+    ],
+    "beep": [
+        ("Kein Ton (stumm)",  "false"),
+        ("Ton  (Beep an)",    "true"),
+    ],
+    "demo_mode": [
+        ("Normal (kein Demo)", "false"),
+        ("Demo-Modus an",      "true"),
+    ],
+    "language_code": [
+        ("Englisch (EN)",   "EN"),
+        ("Deutsch  (DE)",   "DE"),
+        ("Französisch (FR)","FR"),
+        ("Spanisch  (ES)",  "ES"),
+    ],
+}
+
+# Defaults as raw XML values
+PREFS_DEFAULTS = {
+    "language_code":   "EN",
+    "brightness":      "255",
+    "twentyfour":      "false",
+    "format":          "0",
+    "timing":          "300",
+    "sequence":        "0",
+    "effect":          "0",
+    "collage":         "0",
+    "calendar":        "3",
+    "open_at_startup": "1",
+    "auto_on_off":     "2",
+    "sensor_on":       "10",
+    "sensor_off":      "4",
+    "time_on":         "420",
+    "time_off":        "1020",
+    "auto_tilt":       "true",
+    "background_color":"3",
+    "delete_enabled":  "true",
+    "beep":            "false",
+    "demo_mode":       "false",
+}
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
@@ -136,14 +239,20 @@ def pil_to_qpixmap(img: Image.Image, max_w: int = 0, max_h: int = 0) -> QPixmap:
     qi   = QImage(data, img.width, img.height, fmt)
     return QPixmap.fromImage(qi)
 
+def minutes_to_qtime(minutes: int) -> QTime:
+    return QTime(minutes // 60, minutes % 60)
+
+def qtime_to_minutes(t: QTime) -> int:
+    return t.hour() * 60 + t.minute()
+
 def btn(label: str, color: str = "", min_w: int = 0) -> QPushButton:
     b = QPushButton(label)
     style = "QPushButton { padding: 6px 14px; border-radius: 6px; font-size: 13px;"
     if color:
         style += f" background: {color}; color: white;"
     else:
-        style += " background: #0B5ED7; color: white;"
-    style += "} QPushButton:hover { opacity: 0.85; filter: brightness(1.1); }"
+        style += f" background: {BLUE}; color: white;"
+    style += "} QPushButton:hover { filter: brightness(1.1); }"
     b.setStyleSheet(style)
     if min_w:
         b.setMinimumWidth(min_w)
@@ -161,10 +270,46 @@ def lbl(text: str, bold: bool = False, size: int = 13, color: str = "") -> QLabe
     return l
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Drag & Drop drop zone widget (pure Qt, no tkinterdnd2)
+# Prefs: combo helpers (display ↔ raw XML value)
+# ─────────────────────────────────────────────────────────────────────────────
+def make_map_combo(key: str, default_raw: str = "") -> QComboBox:
+    """Create a QComboBox from PREFS_MAP[key]. Items show display labels."""
+    cb = QComboBox()
+    pairs = PREFS_MAP[key]
+    for display, _ in pairs:
+        cb.addItem(display)
+    # select default
+    raw_to_select = default_raw or PREFS_DEFAULTS.get(key, "")
+    for i, (_, raw) in enumerate(pairs):
+        if raw == raw_to_select:
+            cb.setCurrentIndex(i)
+            break
+    return cb
+
+def combo_get_raw(key: str, cb: QComboBox) -> str:
+    """Return the raw XML value for the current combo selection."""
+    idx = cb.currentIndex()
+    pairs = PREFS_MAP.get(key, [])
+    if 0 <= idx < len(pairs):
+        return pairs[idx][1]
+    return cb.currentText()
+
+def combo_set_raw(key: str, cb: QComboBox, raw: str):
+    """Set combo to the entry whose raw value matches."""
+    pairs = PREFS_MAP.get(key, [])
+    for i, (_, v) in enumerate(pairs):
+        if v == raw:
+            cb.setCurrentIndex(i)
+            return
+    # fallback: try direct text match
+    idx = cb.findText(raw)
+    if idx >= 0:
+        cb.setCurrentIndex(idx)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Drop zone widget
 # ─────────────────────────────────────────────────────────────────────────────
 class DropZone(QLabel):
-    """A label that accepts folder/file drops and emits paths_dropped."""
     paths_dropped = Signal(list)
 
     def __init__(self, text: str = "Drop album folders here", parent=None):
@@ -197,11 +342,10 @@ class DropZone(QLabel):
 
     def dropEvent(self, event):
         self._normal_style()
-        paths = [u.toLocalFile() for u in event.mimeData().urls()]
-        self.paths_dropped.emit(paths)
+        self.paths_dropped.emit([u.toLocalFile() for u in event.mimeData().urls()])
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Image card widget for album view
+# Image card
 # ─────────────────────────────────────────────────────────────────────────────
 class ImageCard(QFrame):
     edit_requested   = Signal(str)
@@ -224,8 +368,7 @@ class ImageCard(QFrame):
         try:
             img = Image.open(path)
             img = ImageOps.exif_transpose(img)
-            px  = pil_to_qpixmap(img, thumb_size, thumb_size)
-            img_lbl.setPixmap(px)
+            img_lbl.setPixmap(pil_to_qpixmap(img, thumb_size, thumb_size))
         except Exception:
             img_lbl.setText("Error")
         v.addWidget(img_lbl)
@@ -237,21 +380,21 @@ class ImageCard(QFrame):
         name_lbl.setMaximumWidth(thumb_size + 20)
         v.addWidget(name_lbl)
 
-        btns_row = QHBoxLayout()
-        btns_row.setSpacing(4)
-        b_edit   = btn("Edit", min_w=60)
-        b_rename = btn("✎", min_w=30)
-        b_del    = btn("🗑", RED, min_w=30)
+        row = QHBoxLayout()
+        row.setSpacing(4)
+        b_edit   = btn("Edit",  min_w=60)
+        b_rename = btn("✎",    min_w=30)
+        b_del    = btn("🗑",  RED, min_w=30)
         b_edit.clicked.connect(lambda: self.edit_requested.emit(self.path))
         b_rename.clicked.connect(lambda: self.rename_requested.emit(self.path))
         b_del.clicked.connect(lambda: self.delete_requested.emit(self.path))
-        btns_row.addWidget(b_edit)
-        btns_row.addWidget(b_rename)
-        btns_row.addWidget(b_del)
-        v.addLayout(btns_row)
+        row.addWidget(b_edit)
+        row.addWidget(b_rename)
+        row.addWidget(b_del)
+        v.addLayout(row)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Editor canvas (with crop support via mouse clicks)
+# Editor canvas
 # ─────────────────────────────────────────────────────────────────────────────
 class EditorCanvas(QLabel):
     crop_point_picked = Signal(int, int)
@@ -271,26 +414,21 @@ class EditorCanvas(QLabel):
         self.setPixmap(px)
         self.setFixedSize(px.width() + 20, px.height() + 20)
 
-    def clear(self):
-        self._pixmap_orig = None
-        self.clear()
-        self.setStyleSheet("background: #F7F8FB;")
-
     def mousePressEvent(self, event):
         if not self.crop_mode or self._pixmap_orig is None:
             return
         if event.button() == Qt.MouseButton.LeftButton:
-            px = self._pixmap_orig.width()
-            py = self._pixmap_orig.height()
-            rx = int(event.position().x() * self._img_size[0] / px)
-            ry = int(event.position().y() * self._img_size[1] / py)
+            pw = self._pixmap_orig.width()
+            ph = self._pixmap_orig.height()
+            rx = int(event.position().x() * self._img_size[0] / pw)
+            ry = int(event.position().y() * self._img_size[1] / ph)
             self.crop_point_picked.emit(rx, ry)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Background thread for RSS feed loading
+# RSS fetch thread
 # ─────────────────────────────────────────────────────────────────────────────
 class RssFetchThread(QThread):
-    done = Signal(bytes)
+    done  = Signal(bytes)
     error = Signal(str)
 
     def __init__(self, url: str):
@@ -314,28 +452,30 @@ class MainWindow(QMainWindow):
         self.resize(1440, 900)
         self.setMinimumSize(1100, 700)
 
-        # State
-        self.device_root: str | None  = None
+        self.device_root: str | None        = None
         self.current_album_path: str | None = None
         self.current_album_name: str | None = None
-        self.thumbnail_size = 140
-        self.album_page = 0
-        self.album_page_size = 24
+        self.thumbnail_size     = 140
+        self.album_page         = 0
+        self.album_page_size    = 24
         self.album_items_current: list = []
-        self.rss_feeds: list  = []
+        self.rss_feeds: list            = []
         self.rss_selected_index: int | None = None
-        self.current_rss_feed = None
+        self.current_rss_feed           = None
 
-        # Editor state
         self.editor_original: Image.Image | None = None
-        self.editor_work: Image.Image | None     = None
+        self.editor_work:     Image.Image | None = None
         self.current_edit_path: str | None       = None
         self.crop_points: list = []
 
-        # prefs widgets dict (key -> QWidget)
-        self.prefs_widgets: dict = {}
-        self.brightness_slider: QSlider | None    = None
-        self.brightness_val_lbl: QLabel | None    = None
+        # Prefs widgets registry
+        # Each entry: (widget, kind)
+        # kind: "map_combo" | "slider" | "time" | "sensor_slider" | "line"
+        self._prefs: dict[str, tuple] = {}
+
+        # extra refs for brightness
+        self.brightness_slider:  QSlider | None = None
+        self.brightness_val_lbl: QLabel  | None = None
 
         self._rss_thread: RssFetchThread | None = None
 
@@ -349,18 +489,18 @@ class MainWindow(QMainWindow):
         self._auto_timer.start(3000)
         QTimer.singleShot(1200, self._auto_detect_tick)
 
-    # ─── Global stylesheet ────────────────────────────────────────────────────
+    # ── Global stylesheet ─────────────────────────────────────────────────────
     def _apply_global_style(self):
         self.setStyleSheet("""
             QMainWindow, QWidget { background: #F4F6FB; font-family: 'Segoe UI', Arial, sans-serif; }
-            QTabWidget::pane { border: none; background: #F4F6FB; }
+            QTabWidget::pane  { border: none; background: #F4F6FB; }
             QTabBar::tab {
                 background: #E2E8F4; color: #333; padding: 8px 22px;
                 border-radius: 6px 6px 0 0; margin-right: 2px; font-size: 13px;
             }
             QTabBar::tab:selected { background: #0B5ED7; color: white; font-weight: bold; }
-            QScrollArea { border: none; }
-            QLineEdit, QComboBox, QTextEdit {
+            QScrollArea  { border: none; }
+            QLineEdit, QComboBox, QTextEdit, QTimeEdit {
                 background: white; border: 1px solid #C8D3E8;
                 border-radius: 6px; padding: 4px 8px; font-size: 13px;
             }
@@ -372,29 +512,25 @@ class MainWindow(QMainWindow):
             QSlider::sub-page:horizontal { background: #0B5ED7; border-radius: 3px; }
         """)
 
-    # ─── Build UI ─────────────────────────────────────────────────────────────
+    # ── Build UI ──────────────────────────────────────────────────────────────
     def _build_ui(self):
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.setHandleWidth(1)
-
         sidebar = self._build_sidebar()
         sidebar.setFixedWidth(290)
         splitter.addWidget(sidebar)
-
         self.tabs = QTabWidget()
-        self.tabs.addTab(self._build_albums_tab(),  "Albums")
-        self.tabs.addTab(self._build_editor_tab(),  "Editor")
-        self.tabs.addTab(self._build_prefs_tab(),   "Prefs")
-        self.tabs.addTab(self._build_rss_tab(),     "RSS")
-        self.tabs.addTab(self._build_tools_tab(),   "Tools")
+        self.tabs.addTab(self._build_albums_tab(), "Albums")
+        self.tabs.addTab(self._build_editor_tab(), "Editor")
+        self.tabs.addTab(self._build_prefs_tab(),  "Prefs")
+        self.tabs.addTab(self._build_rss_tab(),    "RSS")
+        self.tabs.addTab(self._build_tools_tab(),  "Tools")
         splitter.addWidget(self.tabs)
-
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
-
         self.setCentralWidget(splitter)
 
-    # ─── Sidebar ──────────────────────────────────────────────────────────────
+    # ── Sidebar ───────────────────────────────────────────────────────────────
     def _build_sidebar(self) -> QWidget:
         w = QWidget()
         w.setStyleSheet(f"background: {SIDEBAR_BG};")
@@ -407,23 +543,21 @@ class MainWindow(QMainWindow):
         v.addWidget(title)
         v.addWidget(lbl("PhotoFrame Manager Pro", size=14, color="#3C3C3C"))
         v.addWidget(lbl(f"Version {__version__} · Build {__build_date__}", size=11, color="#777"))
-
         v.addSpacing(8)
-        self.status_lbl = lbl("No device connected", color="#777")
-        v.addWidget(self.status_lbl)
-        self.path_lbl   = lbl("Path: -",    color="#555")
-        self.storage_lbl = lbl("Storage: -", color="#555")
-        self.album_info_lbl = lbl("Albums: -", color="#555")
-        v.addWidget(self.path_lbl)
-        v.addWidget(self.storage_lbl)
-        v.addWidget(self.album_info_lbl)
+
+        self.status_lbl     = lbl("No device connected", color="#777")
+        self.path_lbl       = lbl("Path: -",     color="#555")
+        self.storage_lbl    = lbl("Storage: -",  color="#555")
+        self.album_info_lbl = lbl("Albums: -",   color="#555")
+        for w2 in [self.status_lbl, self.path_lbl, self.storage_lbl, self.album_info_lbl]:
+            v.addWidget(w2)
 
         v.addSpacing(10)
         for label, slot in [
-            ("Scan device",          self.scan_device),
+            ("Scan device",           self.scan_device),
             ("Select device manually", self.manual_select_device),
-            ("Refresh",              self.refresh_all),
-            ("Reload RSS",           self.load_rss_sources),
+            ("Refresh",               self.refresh_all),
+            ("Reload RSS",            self.load_rss_sources),
         ]:
             b = btn(label)
             b.clicked.connect(slot)
@@ -432,12 +566,10 @@ class MainWindow(QMainWindow):
         v.addSpacing(10)
         self.thumb_lbl = lbl(f"Thumbnail: {self.thumbnail_size}px")
         v.addWidget(self.thumb_lbl)
-        self.thumb_slider = QSlider(Qt.Orientation.Horizontal)
-        self.thumb_slider.setMinimum(80)
-        self.thumb_slider.setMaximum(240)
-        self.thumb_slider.setValue(self.thumbnail_size)
-        self.thumb_slider.valueChanged.connect(self._thumb_changed)
-        v.addWidget(self.thumb_slider)
+        sl = QSlider(Qt.Orientation.Horizontal)
+        sl.setMinimum(80); sl.setMaximum(240); sl.setValue(self.thumbnail_size)
+        sl.valueChanged.connect(self._thumb_changed)
+        v.addWidget(sl)
 
         v.addSpacing(6)
         v.addWidget(lbl("Images per page:"))
@@ -464,14 +596,13 @@ class MainWindow(QMainWindow):
         self.album_page = 0
         self.refresh_album_view()
 
-    # ─── Albums tab ───────────────────────────────────────────────────────────
+    # ── Albums tab ────────────────────────────────────────────────────────────
     def _build_albums_tab(self) -> QWidget:
         w = QWidget()
         h = QHBoxLayout(w)
         h.setContentsMargins(12, 12, 12, 12)
         h.setSpacing(12)
 
-        # Left panel
         left = QFrame()
         left.setFixedWidth(300)
         left.setStyleSheet(f"background: {PANEL_BG}; border-radius: 12px;")
@@ -482,7 +613,6 @@ class MainWindow(QMainWindow):
         self.drop_zone.setMinimumHeight(70)
         self.drop_zone.paths_dropped.connect(self._on_drop_albums)
         lv.addWidget(self.drop_zone)
-
         lv.addWidget(lbl("Detected albums", bold=True, size=14))
 
         self.album_list_widget = QWidget()
@@ -490,15 +620,13 @@ class MainWindow(QMainWindow):
         self.album_list_layout.setSpacing(4)
         self.album_list_layout.setContentsMargins(0, 0, 0, 0)
         self.album_list_layout.addStretch()
-
-        scroll_albums = QScrollArea()
-        scroll_albums.setWidget(self.album_list_widget)
-        scroll_albums.setWidgetResizable(True)
-        scroll_albums.setStyleSheet("background: transparent;")
-        lv.addWidget(scroll_albums, 1)
+        sa = QScrollArea()
+        sa.setWidget(self.album_list_widget)
+        sa.setWidgetResizable(True)
+        sa.setStyleSheet("background: transparent;")
+        lv.addWidget(sa, 1)
         h.addWidget(left)
 
-        # Right panel
         right = QFrame()
         right.setStyleSheet(f"background: {WHITE}; border-radius: 12px;")
         rv = QVBoxLayout(right)
@@ -509,12 +637,10 @@ class MainWindow(QMainWindow):
         topbar.addWidget(self.album_title_lbl, 1)
         self.page_info_lbl = lbl("Page 0/0")
         topbar.addWidget(self.page_info_lbl)
-        b_prev = btn("◀", min_w=36)
-        b_next = btn("▶", min_w=36)
+        b_prev = btn("◀", min_w=36); b_next = btn("▶", min_w=36)
         b_prev.clicked.connect(self.prev_page)
         b_next.clicked.connect(self.next_page)
-        topbar.addWidget(b_prev)
-        topbar.addWidget(b_next)
+        topbar.addWidget(b_prev); topbar.addWidget(b_next)
         rv.addLayout(topbar)
 
         self.album_loading_lbl = lbl("", color="#888")
@@ -524,22 +650,19 @@ class MainWindow(QMainWindow):
         self.image_area_layout = QGridLayout(self.image_area_widget)
         self.image_area_layout.setSpacing(10)
         self.image_area_layout.setContentsMargins(0, 0, 0, 0)
-
-        scroll_imgs = QScrollArea()
-        scroll_imgs.setWidget(self.image_area_widget)
-        scroll_imgs.setWidgetResizable(True)
-        rv.addWidget(scroll_imgs, 1)
-
+        si = QScrollArea()
+        si.setWidget(self.image_area_widget)
+        si.setWidgetResizable(True)
+        rv.addWidget(si, 1)
         h.addWidget(right, 1)
         return w
 
-    # ─── Editor tab ───────────────────────────────────────────────────────────
+    # ── Editor tab ────────────────────────────────────────────────────────────
     def _build_editor_tab(self) -> QWidget:
         w = QWidget()
         v = QVBoxLayout(w)
         v.setContentsMargins(12, 12, 12, 12)
 
-        # Top bar
         top = QFrame()
         top.setStyleSheet(f"background: {WHITE}; border-radius: 8px;")
         th = QHBoxLayout(top)
@@ -552,40 +675,34 @@ class MainWindow(QMainWindow):
             ("Crop mode",        self.toggle_crop_mode),
             ("Reset",            self.reset_editor),
         ]:
-            b = btn(label)
-            b.clicked.connect(slot)
-            th.addWidget(b)
-        b_save = btn("Save", BLUE)
-        b_save.clicked.connect(self.save_editor_image)
-        th.addWidget(b_save)
+            b = btn(label); b.clicked.connect(slot); th.addWidget(b)
+        bs = btn("Save", BLUE)
+        bs.clicked.connect(self.save_editor_image)
+        th.addWidget(bs)
         v.addWidget(top)
 
-        # Canvas
         self.editor_canvas = EditorCanvas()
         self.editor_canvas.crop_point_picked.connect(self._on_crop_point)
-        scroll_editor = QScrollArea()
-        scroll_editor.setWidget(self.editor_canvas)
-        scroll_editor.setWidgetResizable(False)
-        scroll_editor.setStyleSheet("background: #F7F8FB;")
-        v.addWidget(scroll_editor, 1)
+        se = QScrollArea()
+        se.setWidget(self.editor_canvas)
+        se.setWidgetResizable(False)
+        se.setStyleSheet("background: #F7F8FB;")
+        v.addWidget(se, 1)
 
-        # Bottom bar
         bot = QFrame()
         bot.setStyleSheet(f"background: {WHITE}; border-radius: 8px;")
         bh = QHBoxLayout(bot)
         for label, slot in [
-            ("Open image",       self.open_image_file),
-            ("Rename image",     self.rename_current_image),
-            ("Delete image",     self.delete_current_image),
-            ("Save as copy",     self.save_as_copy),
+            ("Open image",   self.open_image_file),
+            ("Rename image", self.rename_current_image),
+            ("Delete image", self.delete_current_image),
+            ("Save as copy", self.save_as_copy),
         ]:
-            b = btn(label)
-            b.clicked.connect(slot)
-            bh.addWidget(b)
+            b = btn(label); b.clicked.connect(slot); bh.addWidget(b)
         v.addWidget(bot)
         return w
 
-    # ─── Prefs tab ────────────────────────────────────────────────────────────
+    # ── Prefs tab ─────────────────────────────────────────────────────────────
     def _build_prefs_tab(self) -> QWidget:
         outer = QWidget()
         ov = QVBoxLayout(outer)
@@ -596,121 +713,248 @@ class MainWindow(QMainWindow):
         inner = QWidget()
         inner.setStyleSheet(f"background: {WHITE};")
         form = QFormLayout(inner)
-        form.setContentsMargins(20, 20, 20, 20)
-        form.setSpacing(10)
+        form.setContentsMargins(24, 24, 24, 24)
+        form.setSpacing(12)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
-        FIELDS = [
-            ("language_code",    "Language",                     "combo",  ["EN", "DE", "FR", "ES"]),
-            ("brightness",       "Brightness (0-255)",           "slider", None),
-            ("twentyfour",       "24h clock",                    "bool",   None),
-            ("format",           "Format (0=Original,1=RadiantColor,2=Scale)", "line", None),
-            ("timing",           "Slideshow interval (seconds)", "line",   None),
-            ("sequence",         "Sequence (0=Ordered,1=Shuffle)","line",  None),
-            ("effect",           "Transition effect (0-16)",     "line",   None),
-            ("collage",          "Collage (0=Off,1=On)",         "line",   None),
-            ("calendar",         "Calendar/Clock (0-3)",         "line",   None),
-            ("open_at_startup",  "Open at startup (1/0)",        "line",   None),
-            ("auto_on_off",      "Auto on/off (0-2)",            "line",   None),
-            ("sensor_on",        "Sensor on (0-10)",             "line",   None),
-            ("sensor_off",       "Sensor off (0-10)",            "line",   None),
-            ("time_on",          "Time on (min from 0:00)",      "line",   None),
-            ("time_off",         "Time off (min from 0:00)",     "line",   None),
-            ("auto_tilt",        "Auto tilt",                    "bool",   None),
-            ("background_color", "Background color (0-3)",       "line",   None),
-            ("delete_enabled",   "Deleting enabled",             "bool",   None),
-            ("beep",             "Beep",                         "bool",   None),
-            ("demo_mode",        "Demo mode",                    "bool",   None),
-        ]
+        # ── Section: Sprache & Display ────────────────────────────────────────
+        form.addRow(self._section_label("🌐  Sprache & Display"))
 
-        DEFAULTS = {
-            "language_code": "EN", "brightness": "255", "twentyfour": "false",
-            "format": "0", "timing": "300", "sequence": "1", "effect": "0",
-            "collage": "0", "calendar": "0", "open_at_startup": "1",
-            "auto_on_off": "2", "sensor_on": "10", "sensor_off": "4",
-            "time_on": "420", "time_off": "1020", "auto_tilt": "true",
-            "background_color": "3", "delete_enabled": "true",
-            "beep": "false", "demo_mode": "false",
-        }
+        # Language
+        cb_lang = make_map_combo("language_code")
+        self._prefs["language_code"] = (cb_lang, "map_combo")
+        form.addRow("Sprache:", cb_lang)
 
-        for key, label, kind, opts in FIELDS:
-            if kind == "combo":
-                w = QComboBox()
-                w.addItems(opts)
-                w.setCurrentText(DEFAULTS.get(key, opts[0]))
-                self.prefs_widgets[key] = w
-            elif kind == "bool":
-                w = QComboBox()
-                w.addItems(["true", "false"])
-                w.setCurrentText(DEFAULTS.get(key, "false"))
-                self.prefs_widgets[key] = w
-            elif kind == "slider":
-                container = QWidget()
-                sh = QHBoxLayout(container)
-                sh.setContentsMargins(0, 0, 0, 0)
-                sl = QSlider(Qt.Orientation.Horizontal)
-                sl.setMinimum(0); sl.setMaximum(255)
-                sl.setValue(int(DEFAULTS.get(key, "255")))
-                val_lbl = QLabel(DEFAULTS.get(key, "255"))
-                val_lbl.setFixedWidth(36)
-                sl.valueChanged.connect(lambda v, l=val_lbl: l.setText(str(v)))
-                sh.addWidget(sl)
-                sh.addWidget(val_lbl)
-                self.brightness_slider  = sl
-                self.brightness_val_lbl = val_lbl
-                self.prefs_widgets[key] = sl
-                w = container
-            else:
-                w = QLineEdit(DEFAULTS.get(key, ""))
-                self.prefs_widgets[key] = w
-            form.addRow(label, w)
+        # Brightness slider
+        bri_container = QWidget()
+        bh = QHBoxLayout(bri_container)
+        bh.setContentsMargins(0, 0, 0, 0)
+        sl_bri = QSlider(Qt.Orientation.Horizontal)
+        sl_bri.setMinimum(0); sl_bri.setMaximum(255)
+        sl_bri.setValue(255)
+        sl_bri.setFixedWidth(220)
+        lbl_bri = QLabel("255")
+        lbl_bri.setFixedWidth(36)
+        sl_bri.valueChanged.connect(lambda v, l=lbl_bri: l.setText(str(v)))
+        bh.addWidget(sl_bri)
+        bh.addWidget(lbl_bri)
+        bh.addWidget(lbl("(0 = dunkel, 255 = hell)", size=11, color="#888"))
+        bh.addStretch()
+        self.brightness_slider  = sl_bri
+        self.brightness_val_lbl = lbl_bri
+        self._prefs["brightness"] = (sl_bri, "slider")
+        form.addRow("Helligkeit:", bri_container)
 
+        # 24h clock
+        cb_24h = make_map_combo("twentyfour")
+        self._prefs["twentyfour"] = (cb_24h, "map_combo")
+        form.addRow("Uhrzeitformat:", cb_24h)
+
+        # ── Section: Diashow ──────────────────────────────────────────────────
+        form.addRow(self._section_label("🖼  Diashow"))
+
+        # Format
+        cb_fmt = make_map_combo("format")
+        self._prefs["format"] = (cb_fmt, "map_combo")
+        form.addRow("Bildformat:", cb_fmt)
+
+        # Timing (slide interval) – slider 5–3600s
+        timing_container = QWidget()
+        th = QHBoxLayout(timing_container)
+        th.setContentsMargins(0, 0, 0, 0)
+        sl_tim = QSlider(Qt.Orientation.Horizontal)
+        sl_tim.setMinimum(5); sl_tim.setMaximum(3600)
+        sl_tim.setValue(300)
+        sl_tim.setFixedWidth(220)
+        lbl_tim = QLabel("300 s")
+        lbl_tim.setFixedWidth(60)
+        sl_tim.valueChanged.connect(lambda v, l=lbl_tim: l.setText(f"{v} s"))
+        th.addWidget(sl_tim); th.addWidget(lbl_tim)
+        th.addWidget(lbl("(5 s … 3600 s)", size=11, color="#888")); th.addStretch()
+        self._prefs["timing"] = (sl_tim, "slider")
+        form.addRow("Intervall:", timing_container)
+
+        # Sequence
+        cb_seq = make_map_combo("sequence")
+        self._prefs["sequence"] = (cb_seq, "map_combo")
+        form.addRow("Reihenfolge:", cb_seq)
+
+        # Effect
+        cb_eff = make_map_combo("effect")
+        self._prefs["effect"] = (cb_eff, "map_combo")
+        form.addRow("Übergangseffekt:", cb_eff)
+
+        # Collage
+        cb_col = make_map_combo("collage")
+        self._prefs["collage"] = (cb_col, "map_combo")
+        form.addRow("Collage:", cb_col)
+
+        # Calendar / clock overlay
+        cb_cal = make_map_combo("calendar")
+        self._prefs["calendar"] = (cb_cal, "map_combo")
+        form.addRow("Kalender/Uhr:", cb_cal)
+
+        # ── Section: Ein/Aus-Steuerung ─────────────────────────────────────────
+        form.addRow(self._section_label("⏰  Ein / Aus – Steuerung"))
+
+        # Open at startup
+        cb_oast = make_map_combo("open_at_startup")
+        self._prefs["open_at_startup"] = (cb_oast, "map_combo")
+        form.addRow("Start beim Einschalten:", cb_oast)
+
+        # Auto on/off mode
+        cb_aoo = make_map_combo("auto_on_off")
+        self._prefs["auto_on_off"] = (cb_aoo, "map_combo")
+        form.addRow("Auto Ein/Aus:", cb_aoo)
+
+        # Sensor on  (0–10, min brightness to trigger ON)
+        s_on_c = QWidget()
+        so_h = QHBoxLayout(s_on_c)
+        so_h.setContentsMargins(0, 0, 0, 0)
+        sl_son = QSlider(Qt.Orientation.Horizontal)
+        sl_son.setMinimum(0); sl_son.setMaximum(10); sl_son.setValue(10)
+        sl_son.setFixedWidth(160)
+        lbl_son = QLabel("10")
+        lbl_son.setFixedWidth(28)
+        sl_son.valueChanged.connect(lambda v, l=lbl_son: l.setText(str(v)))
+        so_h.addWidget(sl_son); so_h.addWidget(lbl_son)
+        so_h.addWidget(lbl("(0 = dunkel, 10 = hell → einschalten)", size=11, color="#888"))
+        so_h.addStretch()
+        self._prefs["sensor_on"] = (sl_son, "slider")
+        form.addRow("Sensor Ein (max):", s_on_c)
+
+        # Sensor off  (0–10, max brightness to trigger OFF)
+        s_off_c = QWidget()
+        sof_h = QHBoxLayout(s_off_c)
+        sof_h.setContentsMargins(0, 0, 0, 0)
+        sl_sof = QSlider(Qt.Orientation.Horizontal)
+        sl_sof.setMinimum(0); sl_sof.setMaximum(10); sl_sof.setValue(4)
+        sl_sof.setFixedWidth(160)
+        lbl_sof = QLabel("4")
+        lbl_sof.setFixedWidth(28)
+        sl_sof.valueChanged.connect(lambda v, l=lbl_sof: l.setText(str(v)))
+        sof_h.addWidget(sl_sof); sof_h.addWidget(lbl_sof)
+        sof_h.addWidget(lbl("(muss kleiner als Sensor Ein sein)", size=11, color="#888"))
+        sof_h.addStretch()
+        self._prefs["sensor_off"] = (sl_sof, "slider")
+        form.addRow("Sensor Aus (min):", s_off_c)
+
+        # Time on  – QTimeEdit
+        te_on = QTimeEdit()
+        te_on.setDisplayFormat("HH:mm")
+        te_on.setTime(minutes_to_qtime(420))   # 07:00
+        te_on.setFixedWidth(100)
+        te_on_c = QWidget()
+        te_on_h = QHBoxLayout(te_on_c)
+        te_on_h.setContentsMargins(0, 0, 0, 0)
+        te_on_h.addWidget(te_on)
+        te_on_h.addWidget(lbl("Uhr (frame schaltet ein)", size=11, color="#888"))
+        te_on_h.addStretch()
+        self._prefs["time_on"] = (te_on, "time")
+        form.addRow("Einschaltzeit:", te_on_c)
+
+        # Time off – QTimeEdit
+        te_off = QTimeEdit()
+        te_off.setDisplayFormat("HH:mm")
+        te_off.setTime(minutes_to_qtime(1020))  # 17:00
+        te_off.setFixedWidth(100)
+        te_off_c = QWidget()
+        te_off_h = QHBoxLayout(te_off_c)
+        te_off_h.setContentsMargins(0, 0, 0, 0)
+        te_off_h.addWidget(te_off)
+        te_off_h.addWidget(lbl("Uhr (frame schaltet aus)", size=11, color="#888"))
+        te_off_h.addStretch()
+        self._prefs["time_off"] = (te_off, "time")
+        form.addRow("Ausschaltzeit:", te_off_c)
+
+        # ── Section: Sonstiges ────────────────────────────────────────────────
+        form.addRow(self._section_label("⚙️  Sonstiges"))
+
+        cb_tilt = make_map_combo("auto_tilt")
+        self._prefs["auto_tilt"] = (cb_tilt, "map_combo")
+        form.addRow("Auto-Ausrichtung:", cb_tilt)
+
+        cb_bg = make_map_combo("background_color")
+        self._prefs["background_color"] = (cb_bg, "map_combo")
+        form.addRow("Hintergrundfarbe:", cb_bg)
+
+        cb_del = make_map_combo("delete_enabled")
+        self._prefs["delete_enabled"] = (cb_del, "map_combo")
+        form.addRow("Löschen:", cb_del)
+
+        cb_beep = make_map_combo("beep")
+        self._prefs["beep"] = (cb_beep, "map_combo")
+        form.addRow("Ton:", cb_beep)
+
+        cb_demo = make_map_combo("demo_mode")
+        self._prefs["demo_mode"] = (cb_demo, "map_combo")
+        form.addRow("Demo-Modus:", cb_demo)
+
+        # ── Buttons ───────────────────────────────────────────────────────────
         btn_row = QHBoxLayout()
-        b_load = btn("Load prefs")
-        b_save = btn("Save prefs")
+        b_load = btn("⬇  Prefs laden")
+        b_save = btn("💾  Prefs speichern")
         b_load.clicked.connect(self.load_prefs)
         b_save.clicked.connect(self.save_prefs)
-        btn_row.addWidget(b_load)
-        btn_row.addWidget(b_save)
+        btn_row.addWidget(b_load); btn_row.addWidget(b_save)
         form.addRow(btn_row)
 
         scroll.setWidget(inner)
         ov.addWidget(scroll)
         return outer
 
+    @staticmethod
+    def _section_label(title: str) -> QLabel:
+        l = QLabel(title)
+        l.setStyleSheet(
+            "font-size: 14px; font-weight: bold; color: #0B5ED7;"
+            " padding-top: 14px; padding-bottom: 2px;"
+        )
+        return l
+
+    # ── Prefs get / set ───────────────────────────────────────────────────────
     def _prefs_get(self, key: str) -> str:
-        w = self.prefs_widgets.get(key)
-        if isinstance(w, QComboBox):
-            return w.currentText()
-        if isinstance(w, QSlider):
-            return str(w.value())
-        if isinstance(w, QLineEdit):
-            return w.text()
+        entry = self._prefs.get(key)
+        if not entry:
+            return ""
+        widget, kind = entry
+        if kind == "map_combo":
+            return combo_get_raw(key, widget)
+        if kind == "slider":
+            return str(widget.value())
+        if kind == "time":
+            return str(qtime_to_minutes(widget.time()))
         return ""
 
     def _prefs_set(self, key: str, value: str):
-        w = self.prefs_widgets.get(key)
-        if isinstance(w, QComboBox):
-            idx = w.findText(value)
-            if idx >= 0:
-                w.setCurrentIndex(idx)
-        elif isinstance(w, QSlider):
+        entry = self._prefs.get(key)
+        if not entry:
+            return
+        widget, kind = entry
+        if kind == "map_combo":
+            combo_set_raw(key, widget, value)
+        elif kind == "slider":
             try:
-                w.setValue(int(value))
-                if self.brightness_val_lbl:
-                    self.brightness_val_lbl.setText(value)
+                v = int(float(value))
+                widget.setValue(v)
+                if key == "brightness" and self.brightness_val_lbl:
+                    self.brightness_val_lbl.setText(str(v))
+                # timing label – rebuild via valueChanged signal (already connected)
             except ValueError:
                 pass
-        elif isinstance(w, QLineEdit):
-            w.setText(value)
+        elif kind == "time":
+            try:
+                widget.setTime(minutes_to_qtime(int(value)))
+            except ValueError:
+                pass
 
-    # ─── RSS tab ──────────────────────────────────────────────────────────────
+    # ── RSS tab ───────────────────────────────────────────────────────────────
     def _build_rss_tab(self) -> QWidget:
         w = QWidget()
         h = QHBoxLayout(w)
         h.setContentsMargins(12, 12, 12, 12)
         h.setSpacing(12)
 
-        # Left
         left = QFrame()
         left.setFixedWidth(290)
         left.setStyleSheet(f"background: {PANEL_BG}; border-radius: 12px;")
@@ -718,34 +962,27 @@ class MainWindow(QMainWindow):
         lv.setContentsMargins(12, 12, 12, 12)
         lv.addWidget(lbl("RSS feeds", bold=True, size=14))
 
-        row_btns = QHBoxLayout()
-        b_add  = btn("Add feed")
-        b_save = btn("Save feeds")
-        b_add.clicked.connect(self.add_rss_feed)
-        b_save.clicked.connect(self.save_rss_feeds)
-        row_btns.addWidget(b_add)
-        row_btns.addWidget(b_save)
-        lv.addLayout(row_btns)
+        rb = QHBoxLayout()
+        ba = btn("Add feed"); bs = btn("Save feeds")
+        ba.clicked.connect(self.add_rss_feed)
+        bs.clicked.connect(self.save_rss_feeds)
+        rb.addWidget(ba); rb.addWidget(bs)
+        lv.addLayout(rb)
 
-        self.feed_list_widget  = QWidget()
-        self.feed_list_layout  = QVBoxLayout(self.feed_list_widget)
+        self.feed_list_widget = QWidget()
+        self.feed_list_layout = QVBoxLayout(self.feed_list_widget)
         self.feed_list_layout.setSpacing(4)
         self.feed_list_layout.setContentsMargins(0, 0, 0, 0)
         self.feed_list_layout.addStretch()
-        scroll_feeds = QScrollArea()
-        scroll_feeds.setWidget(self.feed_list_widget)
-        scroll_feeds.setWidgetResizable(True)
-        lv.addWidget(scroll_feeds, 1)
+        sf = QScrollArea(); sf.setWidget(self.feed_list_widget); sf.setWidgetResizable(True)
+        lv.addWidget(sf, 1)
 
-        reload_btn = btn("Reload feeds")
-        reload_btn.clicked.connect(self.load_rss_sources)
-        del_btn    = btn("Delete feed", RED)
-        del_btn.clicked.connect(self.delete_selected_feed)
-        lv.addWidget(reload_btn)
-        lv.addWidget(del_btn)
+        br = btn("Reload feeds"); bd = btn("Delete feed", RED)
+        br.clicked.connect(self.load_rss_sources)
+        bd.clicked.connect(self.delete_selected_feed)
+        lv.addWidget(br); lv.addWidget(bd)
         h.addWidget(left)
 
-        # Right
         right = QFrame()
         right.setStyleSheet(f"background: {WHITE}; border-radius: 12px;")
         rv = QVBoxLayout(right)
@@ -758,44 +995,36 @@ class MainWindow(QMainWindow):
         self.feed_gallery_widget = QWidget()
         self.feed_gallery_layout = QGridLayout(self.feed_gallery_widget)
         self.feed_gallery_layout.setSpacing(10)
-        scroll_gallery = QScrollArea()
-        scroll_gallery.setWidget(self.feed_gallery_widget)
-        scroll_gallery.setWidgetResizable(True)
-        rv.addWidget(scroll_gallery, 1)
+        sg = QScrollArea(); sg.setWidget(self.feed_gallery_widget); sg.setWidgetResizable(True)
+        rv.addWidget(sg, 1)
         h.addWidget(right, 1)
         return w
 
-    # ─── Tools tab ────────────────────────────────────────────────────────────
+    # ── Tools tab ─────────────────────────────────────────────────────────────
     def _build_tools_tab(self) -> QWidget:
         w = QWidget()
         v = QVBoxLayout(w)
         v.setContentsMargins(20, 20, 20, 20)
         v.setSpacing(10)
-
         v.addWidget(lbl("Device and folder statistics", bold=True, size=18))
-
         for label, slot in [
-            ("Reload everything",    self.refresh_all),
-            ("Scan device",          self.scan_device),
-            ("Import album/folder",  self.import_album_folder),
-            ("Create backup (ZIP)",  self.create_backup),
-            ("Restore backup",       self.restore_backup),
+            ("Reload everything",   self.refresh_all),
+            ("Scan device",         self.scan_device),
+            ("Import album/folder", self.import_album_folder),
+            ("Create backup (ZIP)", self.create_backup),
+            ("Restore backup",      self.restore_backup),
         ]:
-            b = btn(label)
-            b.clicked.connect(slot)
-            v.addWidget(b)
-
-        b_exit = btn("Exit", RED)
-        b_exit.clicked.connect(self.close)
-        v.addWidget(b_exit)
-
+            b = btn(label); b.clicked.connect(slot); v.addWidget(b)
+        bx = btn("Exit", RED)
+        bx.clicked.connect(self.close)
+        v.addWidget(bx)
         self.stats_box = QTextEdit()
         self.stats_box.setReadOnly(True)
         self.stats_box.setStyleSheet(f"background: {WHITE}; border-radius: 8px; font-family: monospace;")
         v.addWidget(self.stats_box, 1)
         return w
 
-    # ─── Auto detect ──────────────────────────────────────────────────────────
+    # ── Auto detect ───────────────────────────────────────────────────────────
     def _auto_detect_tick(self):
         try:
             self.scan_device(silent=True)
@@ -849,10 +1078,10 @@ class MainWindow(QMainWindow):
                 if not mp or not os.path.isdir(mp):
                     continue
                 score = 0
-                if os.path.exists(os.path.join(mp, ".prefs")):           score += 3
+                if os.path.exists(os.path.join(mp, ".prefs")):             score += 3
                 if os.path.exists(os.path.join(mp, ".config", "rss.cfg")): score += 2
-                if os.path.isdir(os.path.join(mp, "ALBUM")):             score += 4
-                if os.path.isdir(os.path.join(mp, "Album")):             score += 4
+                if os.path.isdir(os.path.join(mp, "ALBUM")):               score += 4
+                if os.path.isdir(os.path.join(mp, "Album")):               score += 4
                 if score > 0:
                     candidates.append((score, mp))
         except Exception:
@@ -860,10 +1089,9 @@ class MainWindow(QMainWindow):
         if not candidates:
             return None
         candidates.sort(key=lambda x: (x[0], x[1]), reverse=True)
-        logging.info("Device candidates: %s", candidates)
         return candidates[0][1]
 
-    # ─── Refresh ──────────────────────────────────────────────────────────────
+    # ── Refresh ───────────────────────────────────────────────────────────────
     def refresh_all(self):
         self.refresh_album_list()
         self.load_prefs()
@@ -896,7 +1124,6 @@ class MainWindow(QMainWindow):
             os.makedirs(p, exist_ok=True)
             return p
         except Exception:
-            logging.exception("Could not create ALBUM folder")
             return None
 
     def _update_album_info(self):
@@ -929,26 +1156,16 @@ class MainWindow(QMainWindow):
                 p = os.path.join(root, d)
                 if os.path.isdir(p):
                     files, subdirs, size = dir_stats(p)
-                    img_count = len([x for x in os.listdir(p)
-                                     if os.path.splitext(x)[1].lower() in IMAGE_EXTS
-                                     and os.path.isfile(os.path.join(p, x))])
-                    lines.append(f"{d}: {img_count} images, {files} files, "
+                    ic = len([x for x in os.listdir(p)
+                              if os.path.splitext(x)[1].lower() in IMAGE_EXTS
+                              and os.path.isfile(os.path.join(p, x))])
+                    lines.append(f"{d}: {ic} images, {files} files, "
                                  f"{subdirs} subfolders, {human_size(size)}")
         except Exception:
             logging.exception("Stats failed")
         self.stats_box.setPlainText("\n".join(lines))
 
-    # ─── Albums ───────────────────────────────────────────────────────────────
-    def _clear_album_view(self):
-        self._clear_layout(self.album_list_layout)
-        self._clear_grid(self.image_area_layout)
-        self.album_title_lbl.setText("No album selected")
-        self.page_info_lbl.setText("Page 0/0")
-        self.album_items_current = []
-        self.current_album_path  = None
-        self.current_album_name  = None
-        self.album_page = 0
-
+    # ── Albums ────────────────────────────────────────────────────────────────
     def _clear_layout(self, layout):
         while layout.count() > 0:
             item = layout.takeAt(0)
@@ -960,6 +1177,16 @@ class MainWindow(QMainWindow):
             item = layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
+
+    def _clear_album_view(self):
+        self._clear_layout(self.album_list_layout)
+        self._clear_grid(self.image_area_layout)
+        self.album_title_lbl.setText("No album selected")
+        self.page_info_lbl.setText("Page 0/0")
+        self.album_items_current = []
+        self.current_album_path  = None
+        self.current_album_name  = None
+        self.album_page = 0
 
     def refresh_album_list(self):
         self._clear_layout(self.album_list_layout)
@@ -978,18 +1205,18 @@ class MainWindow(QMainWindow):
                 full = os.path.join(root_dir, name)
                 if os.path.isdir(full):
                     files, _, size = dir_stats(full)
-                    img_count = len([x for x in os.listdir(full)
-                                     if os.path.splitext(x)[1].lower() in IMAGE_EXTS
-                                     and os.path.isfile(os.path.join(full, x))])
-                    albums.append((name, full, img_count, human_size(size)))
+                    ic = len([x for x in os.listdir(full)
+                              if os.path.splitext(x)[1].lower() in IMAGE_EXTS
+                              and os.path.isfile(os.path.join(full, x))])
+                    albums.append((name, full, ic, human_size(size)))
         except Exception:
             logging.exception("Failed to read album list")
         if not albums:
             self.album_list_layout.addWidget(lbl("No albums found"))
             self.album_list_layout.addStretch()
             return
-        for name, full, img_count, size in albums:
-            self._add_album_row(name, full, img_count, size)
+        for name, full, ic, size in albums:
+            self._add_album_row(name, full, ic, size)
         self.album_list_layout.addStretch()
 
     def _add_album_row(self, name: str, path: str, img_count: int, size: str):
@@ -997,19 +1224,18 @@ class MainWindow(QMainWindow):
         row.setStyleSheet(f"background: {WHITE}; border-radius: 8px;")
         h = QHBoxLayout(row)
         h.setContentsMargins(8, 6, 8, 6)
-        txt_btn = QPushButton(f"{name}\n{img_count} images · {size}")
-        txt_btn.setStyleSheet(
+        tb = QPushButton(f"{name}\n{img_count} images · {size}")
+        tb.setStyleSheet(
             "background: transparent; color: #111; text-align: left; "
             "border: none; font-size: 12px; padding: 2px;"
         )
-        txt_btn.clicked.connect(lambda _=False, p=path, n=name: self.open_album(p, n))
-        h.addWidget(txt_btn, 1)
-        b_ren = btn("✎", min_w=30)
-        b_del = btn("🗑", RED, min_w=30)
-        b_ren.clicked.connect(lambda _=False, p=path: self.rename_path(p))
-        b_del.clicked.connect(lambda _=False, p=path: self.delete_path(p))
-        h.addWidget(b_ren)
-        h.addWidget(b_del)
+        tb.clicked.connect(lambda _=False, p=path, n=name: self.open_album(p, n))
+        h.addWidget(tb, 1)
+        br = btn("✎", min_w=30)
+        bd = btn("🗑", RED, min_w=30)
+        br.clicked.connect(lambda _=False, p=path: self.rename_path(p))
+        bd.clicked.connect(lambda _=False, p=path: self.delete_path(p))
+        h.addWidget(br); h.addWidget(bd)
         self.album_list_layout.insertWidget(self.album_list_layout.count() - 1, row)
 
     def open_album(self, path: str, name: str):
@@ -1030,13 +1256,13 @@ class MainWindow(QMainWindow):
         try:
             files = [f for f in sorted(os.listdir(self.current_album_path))
                      if os.path.splitext(f)[1].lower() in IMAGE_EXTS]
-            total  = len(files)
+            total = len(files)
             self.album_items_current = files
-            pages  = max(1, (total + self.album_page_size - 1) // self.album_page_size)
+            pages = max(1, (total + self.album_page_size - 1) // self.album_page_size)
             if self.album_page >= pages:
                 self.album_page = max(0, pages - 1)
-            start  = self.album_page * self.album_page_size
-            view   = files[start: start + self.album_page_size]
+            start = self.album_page * self.album_page_size
+            view  = files[start: start + self.album_page_size]
             self.page_info_lbl.setText(f"Page {self.album_page + 1}/{pages} · {total} images")
             if not view:
                 self.image_area_layout.addWidget(lbl("No images found"), 0, 0)
@@ -1080,7 +1306,6 @@ class MainWindow(QMainWindow):
             if os.path.isdir(src):
                 dst = os.path.join(dest_base, os.path.basename(src))
                 try:
-                    logging.info("Copy: %s -> %s", src, dst)
                     shutil.copytree(src, dst, dirs_exist_ok=True)
                     copied += 1
                 except Exception:
@@ -1088,16 +1313,14 @@ class MainWindow(QMainWindow):
         self.refresh_all()
         QMessageBox.information(self, "Done", f"Copied {copied} album folder(s).")
 
-    # ─── Rename / Delete ──────────────────────────────────────────────────────
+    # ── Rename / Delete ───────────────────────────────────────────────────────
     def rename_path(self, path: str):
         base = os.path.basename(path)
-        new_name, ok = QInputDialog.getText(self, "Rename", f"New name for:\n{base}",
-                                            text=base)
+        new_name, ok = QInputDialog.getText(self, "Rename", f"New name for:\n{base}", text=base)
         if not ok or not new_name or new_name == base:
             return
         new_path = os.path.join(os.path.dirname(path), new_name)
         try:
-            logging.info("Rename: %s -> %s", path, new_path)
             os.rename(path, new_path)
             self.refresh_all()
         except Exception:
@@ -1111,7 +1334,6 @@ class MainWindow(QMainWindow):
         if reply != QMessageBox.StandardButton.Yes:
             return
         try:
-            logging.info("Delete: %s", path)
             if os.path.isdir(path):
                 shutil.rmtree(path)
             else:
@@ -1121,19 +1343,18 @@ class MainWindow(QMainWindow):
             logging.exception("Delete failed")
             QMessageBox.critical(self, "Error", "Delete failed.")
 
-    # ─── Editor ───────────────────────────────────────────────────────────────
+    # ── Editor ────────────────────────────────────────────────────────────────
     def open_image_path(self, path: str):
         try:
-            self.current_edit_path = path
-            self.editor_original   = Image.open(path)
-            self.editor_original   = ImageOps.exif_transpose(self.editor_original)
-            self.editor_work       = self.editor_original.copy()
-            self.crop_points       = []
+            self.current_edit_path       = path
+            self.editor_original         = Image.open(path)
+            self.editor_original         = ImageOps.exif_transpose(self.editor_original)
+            self.editor_work             = self.editor_original.copy()
+            self.crop_points             = []
             self.editor_canvas.crop_mode = False
             self.editor_title_lbl.setText(os.path.basename(path))
             self.tabs.setCurrentIndex(1)
             self._refresh_editor_preview()
-            logging.info("Editor opened: %s", path)
         except Exception:
             logging.exception("Image open failed")
             QMessageBox.critical(self, "Image error", "Image could not be opened.")
@@ -1147,10 +1368,8 @@ class MainWindow(QMainWindow):
             self.open_image_path(path)
 
     def _refresh_editor_preview(self):
-        if self.editor_work is None:
-            self.editor_canvas.clear()
-            return
-        self.editor_canvas.set_image(self.editor_work)
+        if self.editor_work:
+            self.editor_canvas.set_image(self.editor_work)
 
     def rotate_left(self):
         if self.editor_work:
@@ -1173,27 +1392,27 @@ class MainWindow(QMainWindow):
     def toggle_crop_mode(self):
         self.editor_canvas.crop_mode = not self.editor_canvas.crop_mode
         self.crop_points = []
-        msg = "Crop mode active: click two points." if self.editor_canvas.crop_mode else "Crop mode disabled."
+        msg = ("Crop mode active: click two points."
+               if self.editor_canvas.crop_mode else "Crop mode disabled.")
         QMessageBox.information(self, "Crop", msg)
 
     def _on_crop_point(self, rx: int, ry: int):
         self.crop_points.append((rx, ry))
         if len(self.crop_points) == 2 and self.editor_work:
             (x1, y1), (x2, y2) = self.crop_points
-            left   = min(x1, x2); upper = min(y1, y2)
-            right  = max(x1, x2); lower = max(y1, y2)
+            left = min(x1, x2); upper = min(y1, y2)
+            right = max(x1, x2); lower = max(y1, y2)
             if right > left and lower > upper:
                 self.editor_work = self.editor_work.crop((left, upper, right, lower))
-                logging.info("Crop applied: %s", (left, upper, right, lower))
             self.editor_canvas.crop_mode = False
             self.crop_points = []
             self._refresh_editor_preview()
 
     def reset_editor(self):
         if self.editor_original:
-            self.editor_work = self.editor_original.copy()
+            self.editor_work             = self.editor_original.copy()
             self.editor_canvas.crop_mode = False
-            self.crop_points = []
+            self.crop_points             = []
             self._refresh_editor_preview()
 
     def save_editor_image(self):
@@ -1201,7 +1420,6 @@ class MainWindow(QMainWindow):
             return
         try:
             self.editor_work.save(self.current_edit_path)
-            logging.info("Image saved: %s", self.current_edit_path)
             self.refresh_all()
             QMessageBox.information(self, "Saved", "Image saved.")
         except Exception:
@@ -1212,16 +1430,13 @@ class MainWindow(QMainWindow):
         if not self.editor_work:
             return
         path, _ = QFileDialog.getSaveFileName(
-            self, "Save as copy", "",
-            "JPEG (*.jpg);;PNG (*.png);;WEBP (*.webp)"
+            self, "Save as copy", "", "JPEG (*.jpg);;PNG (*.png);;WEBP (*.webp)"
         )
         if path:
             try:
                 self.editor_work.save(path)
-                logging.info("Copy saved: %s", path)
                 QMessageBox.information(self, "Saved", "Copy saved.")
             except Exception:
-                logging.exception("Copy save failed")
                 QMessageBox.critical(self, "Error", "Copy could not be saved.")
 
     def rename_current_image(self):
@@ -1232,7 +1447,7 @@ class MainWindow(QMainWindow):
         if self.current_edit_path:
             self.delete_path(self.current_edit_path)
 
-    # ─── Prefs load/save ──────────────────────────────────────────────────────
+    # ── Prefs load / save ─────────────────────────────────────────────────────
     def load_prefs(self):
         if not self.device_root:
             return
@@ -1244,7 +1459,7 @@ class MainWindow(QMainWindow):
             tree = ET.parse(prefs_file)
             root = tree.getroot()
             for setup in root.iter("setup"):
-                for key in self.prefs_widgets:
+                for key in self._prefs:
                     node = setup.find(key)
                     if node is not None and node.text is not None:
                         self._prefs_set(key, node.text)
@@ -1263,18 +1478,18 @@ class MainWindow(QMainWindow):
             tree = ET.parse(prefs_file)
             root = tree.getroot()
             for setup in root.iter("setup"):
-                for key in self.prefs_widgets:
+                for key in self._prefs:
                     node = setup.find(key)
                     if node is not None:
                         node.text = self._prefs_get(key)
             tree.write(prefs_file, encoding="UTF-8", xml_declaration=True)
             logging.info(".prefs saved")
-            QMessageBox.information(self, "Saved", "Preferences saved.")
+            QMessageBox.information(self, "Saved", "Einstellungen gespeichert.")
         except Exception:
             logging.exception("Prefs save failed")
             QMessageBox.critical(self, "Error", "Preferences could not be saved.")
 
-    # ─── RSS ──────────────────────────────────────────────────────────────────
+    # ── RSS ───────────────────────────────────────────────────────────────────
     def _rss_config_path(self) -> str | None:
         if not self.device_root:
             return None
@@ -1296,9 +1511,8 @@ class MainWindow(QMainWindow):
                     self.rss_feeds.append({
                         "group": gname,
                         "name":  link.findtext("name", "Unnamed"),
-                        "url":   link.findtext("url",  ""),
+                        "url":   link.findtext("url", ""),
                     })
-            logging.info("RSS feeds loaded: %s", len(self.rss_feeds))
         except ET.ParseError as e:
             logging.error("RSS parse error: %s", e)
             QMessageBox.warning(self, "RSS error", f"rss.cfg is not valid XML.\n\nError: {e}")
@@ -1317,46 +1531,42 @@ class MainWindow(QMainWindow):
             row.setStyleSheet(f"background: {WHITE}; border-radius: 8px;")
             h = QHBoxLayout(row)
             h.setContentsMargins(8, 6, 8, 6)
-            txt_btn = QPushButton(f"{feed['name']}\n{feed['url']}")
-            txt_btn.setStyleSheet(
+            tb = QPushButton(f"{feed['name']}\n{feed['url']}")
+            tb.setStyleSheet(
                 "background: transparent; color: #111; text-align: left; "
                 "border: none; font-size: 11px; padding: 2px;"
             )
-            txt_btn.clicked.connect(lambda _=False, i=idx: self.open_rss_feed(i))
-            h.addWidget(txt_btn, 1)
-            b_ed  = btn("✎", min_w=30)
-            b_del = btn("🗑", RED, min_w=30)
-            b_ed.clicked.connect(lambda _=False, i=idx: self.edit_rss_feed(i))
-            b_del.clicked.connect(lambda _=False, i=idx: self.remove_rss_feed(i))
-            h.addWidget(b_ed)
-            h.addWidget(b_del)
+            tb.clicked.connect(lambda _=False, i=idx: self.open_rss_feed(i))
+            h.addWidget(tb, 1)
+            be = btn("✎", min_w=30)
+            bd = btn("🗑", RED, min_w=30)
+            be.clicked.connect(lambda _=False, i=idx: self.edit_rss_feed(i))
+            bd.clicked.connect(lambda _=False, i=idx: self.remove_rss_feed(i))
+            h.addWidget(be); h.addWidget(bd)
             self.feed_list_layout.insertWidget(self.feed_list_layout.count() - 1, row)
         self.feed_list_layout.addStretch()
 
     def add_rss_feed(self):
-        name, ok = QInputDialog.getText(self, "RSS feed", "Name of the new feed:")
+        name,  ok = QInputDialog.getText(self, "RSS feed", "Name of the new feed:")
         if not ok or not name: return
-        url, ok = QInputDialog.getText(self, "RSS feed", "URL of the new feed:")
+        url,   ok = QInputDialog.getText(self, "RSS feed", "URL of the new feed:")
         if not ok or not url:  return
         group, ok = QInputDialog.getText(self, "RSS feed", "Group name:", text="Default")
-        group = group or "Default"
-        self.rss_feeds.append({"group": group, "name": name, "url": url})
-        logging.info("RSS added: %s -> %s", name, url)
+        self.rss_feeds.append({"group": group or "Default", "name": name, "url": url})
         self._render_rss_feed_list()
 
     def edit_rss_feed(self, index: int):
         feed = self.rss_feeds[index]
-        name, ok = QInputDialog.getText(self, "RSS feed", "Name:", text=feed["name"])
+        name,  ok = QInputDialog.getText(self, "RSS feed", "Name:", text=feed["name"])
         if not ok or not name: return
-        url, ok = QInputDialog.getText(self, "RSS feed", "URL:", text=feed["url"])
+        url,   ok = QInputDialog.getText(self, "RSS feed", "URL:",  text=feed["url"])
         if not ok or not url:  return
         group, ok = QInputDialog.getText(self, "RSS feed", "Group:", text=feed["group"])
-        group = group or "Default"
-        self.rss_feeds[index] = {"group": group, "name": name, "url": url}
+        self.rss_feeds[index] = {"group": group or "Default", "name": name, "url": url}
         self._render_rss_feed_list()
 
     def remove_rss_feed(self, index: int):
-        feed = self.rss_feeds[index]
+        feed  = self.rss_feeds[index]
         reply = QMessageBox.question(self, "Delete", f"Delete RSS feed?\n{feed['name']}",
                                      QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if reply == QMessageBox.StandardButton.Yes:
@@ -1385,7 +1595,6 @@ class MainWindow(QMainWindow):
                     ET.SubElement(link, "name").text = feed["name"]
                     ET.SubElement(link, "url").text  = feed["url"]
             ET.ElementTree(root).write(cfg, encoding="UTF-8", xml_declaration=True)
-            logging.info("rss.cfg saved: %s", cfg)
             QMessageBox.information(self, "Saved", "rss.cfg saved.")
         except Exception:
             logging.exception("RSS save failed")
@@ -1414,10 +1623,12 @@ class MainWindow(QMainWindow):
             self._rss_thread.quit()
         self._rss_thread = RssFetchThread(url)
         self._rss_thread.done.connect(self._on_rss_data)
-        self._rss_thread.error.connect(lambda msg: (
-            self._clear_grid(self.feed_gallery_layout),
-            self.feed_gallery_layout.addWidget(lbl(msg, color="#C0392B"), 0, 0)
-        ))
+        self._rss_thread.error.connect(
+            lambda msg: (
+                self._clear_grid(self.feed_gallery_layout),
+                self.feed_gallery_layout.addWidget(lbl(msg, color=RED), 0, 0),
+            )
+        )
         self._rss_thread.start()
 
     def _on_rss_data(self, data: bytes):
@@ -1441,7 +1652,7 @@ class MainWindow(QMainWindow):
         except Exception:
             logging.exception("RSS feed parse failed")
             self.feed_gallery_layout.addWidget(
-                lbl("RSS could not be parsed.", color="#C0392B"), 0, 0
+                lbl("RSS could not be parsed.", color=RED), 0, 0
             )
 
     def _add_rss_card(self, title: str, desc: str, media_url: str | None, idx: int):
@@ -1449,7 +1660,6 @@ class MainWindow(QMainWindow):
         card.setStyleSheet(f"background: {CARD_BG}; border-radius: 12px;")
         v = QVBoxLayout(card)
         v.setContentsMargins(10, 10, 10, 10)
-
         if media_url and re.search(r"\.(jpg|jpeg|png|bmp|gif|webp)(\?|$)", media_url, re.I):
             data = fetch_url_bytes(media_url)
             if data:
@@ -1457,19 +1667,17 @@ class MainWindow(QMainWindow):
                     img = Image.open(io.BytesIO(data))
                     img = ImageOps.exif_transpose(img)
                     px  = pil_to_qpixmap(img, 200, 160)
-                    img_lbl = QLabel()
-                    img_lbl.setPixmap(px)
-                    img_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                    v.addWidget(img_lbl)
+                    il  = QLabel(); il.setPixmap(px)
+                    il.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                    v.addWidget(il)
                 except Exception:
                     pass
-
         v.addWidget(lbl(title, bold=True, size=12))
         v.addWidget(lbl(strip_html(desc), size=11, color="#444"))
         cols = 3
         self.feed_gallery_layout.addWidget(card, idx // cols, idx % cols)
 
-    # ─── Backup / restore ─────────────────────────────────────────────────────
+    # ── Backup / restore ──────────────────────────────────────────────────────
     def create_backup(self):
         if not self.device_root:
             QMessageBox.warning(self, "No device", "No PhotoFrame detected.")
@@ -1480,7 +1688,6 @@ class MainWindow(QMainWindow):
         if not dest: return
         try:
             base = os.path.splitext(dest)[0]
-            logging.info("Creating backup: root=%s dest=%s", self.device_root, dest)
             shutil.make_archive(base, "zip", self.device_root)
             QMessageBox.information(self, "Backup", f"Backup created:\n{dest}")
         except Exception:
@@ -1498,12 +1705,11 @@ class MainWindow(QMainWindow):
         reply = QMessageBox.question(
             self, "Restore",
             "Restore backup?\nFiles with the same name will be overwritten.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if reply != QMessageBox.StandardButton.Yes:
             return
         try:
-            logging.info("Restore: %s -> %s", src, self.device_root)
             shutil.unpack_archive(src, self.device_root)
             self.refresh_all()
             QMessageBox.information(self, "Restored", "Backup has been restored.")
@@ -1522,7 +1728,6 @@ class MainWindow(QMainWindow):
         dst = os.path.join(dest_base, os.path.basename(src))
         try:
             shutil.copytree(src, dst, dirs_exist_ok=True)
-            logging.info("Album imported: %s -> %s", src, dst)
             self.refresh_all()
         except Exception:
             logging.exception("Import failed")
