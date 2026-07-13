@@ -1589,41 +1589,26 @@ class MainWindow(QMainWindow):
     def load_prefs(self):
         if not self.deviceroot:
             return
-    
-        prefs_file = os.path.join(self.deviceroot, ".prefs")
-        if not os.path.exists(prefs_file):
-            logging.warning(".prefs not found: %s", prefs_file)
+        path = os.path.join(self.deviceroot, ".prefs")
+        if not os.path.exists(path):
             return
-    
         try:
-            with open(prefs_file, "r", encoding="utf-8", errors="replace") as fh:
+            with open(path, "r", encoding="utf-8", errors="replace") as fh:
                 raw = fh.read()
-    
-            end_tag = "</plist>"
-            end_pos = raw.find(end_tag)
-            if end_pos != -1:
-                raw = raw[:end_pos + len(end_tag)]
-    
+            # FIX: Trunkiere nach dem schließenden Root-Tag, um "junk after document"-Fehler zu vermeiden
+            end = raw.rfind(">")
+            if end != -1:
+                raw = raw[:end + 1]
             root = ET.fromstring(raw)
-    
-            for setup in root.iter("setup"):
-                for key in self.prefs:
-                    node = setup.find(key)
-                    if node is not None and node.text is not None:
-                        self.prefs_set(key, node.text)
-    
-            logging.info(".prefs loaded")
-            self.update_auto_on_off_widgets()
-    
+            setup = root.find("setup")
+            if setup is not None:
+                for child in setup:
+                    self.prefs_set(child.tag, child.text or "")
+            logging.info("Prefs loaded from %s", path)
         except ET.ParseError as e:
-            logging.exception("Prefs parse failed")
-            QMessageBox.warning(
-                self,
-                "Prefs error",
-                f".prefs is not valid XML or contains trailing data.\n\n{e}"
-            )
-        except Exception:
-            logging.exception("Prefs load failed")
+            logging.error("Prefs parse failed\n%s", e)
+        except Exception as e:
+            logging.exception("load_prefs error")
 
     def _update_auto_on_off_widgets(self):
         """Enable/disable sensor and time widgets based on auto_on_off value."""
@@ -1807,7 +1792,7 @@ class MainWindow(QMainWindow):
             self.rss_selected_index = None
 
     def save_rss_feeds(self):
-        cfg = self.rss_config_path()
+        cfg = self._rss_config_path()
         if not cfg:
             QMessageBox.warning(self, "RSS", "No device connected.")
             return
