@@ -1599,24 +1599,27 @@ class MainWindow(QMainWindow):
             with open(prefs_file, "r", encoding="utf-8", errors="replace") as fh:
                 raw = fh.read()
     
+            logging.info("DEBUG .prefs length: %d", len(raw))
+    
             xml_to_parse = None
     
-            # 1) Erst normales plist versuchen
-            start_plist = raw.find("<plist")
-            end_plist = raw.find("</plist>")
-            if start_plist != -1 and end_plist != -1 and end_plist > start_plist:
-                xml_to_parse = raw[start_plist:end_plist + len("</plist>")]
-    
-            # 2) Falls kein vollständiges plist vorhanden ist: nur <setup>...</setup> nehmen
-            if xml_to_parse is None:
-                start_setup = raw.find("<setup>")
-                end_setup = raw.find("</setup>")
-                if start_setup != -1 and end_setup != -1 and end_setup > start_setup:
-                    setup_xml = raw[start_setup:end_setup + len("</setup>")]
-                    xml_to_parse = f"<plist>{setup_xml}</plist>"
+            m = re.search(r'(<plist.*?</plist>)', raw, re.IGNORECASE | re.DOTALL)
+            if m:
+                xml_to_parse = m.group(1)
     
             if xml_to_parse is None:
-                raise ET.ParseError("No usable <setup> or <plist> XML block found in .prefs")
+                m = re.search(r'(<setup>.*?</setup>)', raw, re.IGNORECASE | re.DOTALL)
+                if m:
+                    xml_to_parse = "<plist>" + m.group(1) + "</plist>"
+    
+            if xml_to_parse is None:
+                logging.warning("No usable XML block found in .prefs")
+                QMessageBox.warning(
+                    self,
+                    "Prefs error",
+                    ".prefs could not be parsed. Default values will be used."
+                )
+                return
     
             root = ET.fromstring(xml_to_parse)
     
