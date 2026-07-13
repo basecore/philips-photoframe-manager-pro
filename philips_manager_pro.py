@@ -514,7 +514,7 @@ class MainWindow(QMainWindow):
         self.resize(1440, 900)
         self.setMinimumSize(1100, 700)
 
-        self.device_root: str | None        = None
+        self.deviceroot: str | None        = None
         self.current_album_path: str | None = None
         self.current_album_name: str | None = None
         self.thumbnail_size     = 140
@@ -1151,16 +1151,16 @@ class MainWindow(QMainWindow):
         dlg.exec()
 
     def show_prefs_raw(self):
-        if not self.device_root:
+        if not self.deviceroot:
             self._show_raw_file("", ".prefs")
             return
-        self._show_raw_file(os.path.join(self.device_root, ".prefs"), ".prefs")
+        self._show_raw_file(os.path.join(self.deviceroot, ".prefs"), ".prefs")
 
     def show_rss_raw(self):
-        if not self.device_root:
+        if not self.deviceroot:
             self._show_raw_file("", "rss.cfg")
             return
-        self._show_raw_file(os.path.join(self.device_root, ".config", "rss.cfg"), "rss.cfg")
+        self._show_raw_file(os.path.join(self.deviceroot, ".config", "rss.cfg"), "rss.cfg")
 
     # ── Auto detect ───────────────────────────────────────────────────────────
     def _auto_detect_tick(self):
@@ -1173,7 +1173,7 @@ class MainWindow(QMainWindow):
         path = QFileDialog.getExistingDirectory(self, "Select PhotoFrame device folder")
         if not path:
             return
-        self.device_root = path
+        self.deviceroot = path
         self.status_lbl.setText("Device (manual) connected")
         self.status_lbl.setStyleSheet(f"color: {GREEN};")
         self.path_lbl.setText(f"Path: {path}")
@@ -1181,9 +1181,9 @@ class MainWindow(QMainWindow):
 
     def scan_device(self, silent: bool = False):
         try:
-            found   = self._find_device_root()
-            changed = found != self.device_root
-            self.device_root = found
+            found   = self._find_deviceroot()
+            changed = found != self.deviceroot
+            self.deviceroot = found
             if found:
                 self.status_lbl.setText("Device connected")
                 self.status_lbl.setStyleSheet(f"color: {GREEN};")
@@ -1208,7 +1208,7 @@ class MainWindow(QMainWindow):
         except Exception:
             logging.exception("Scan error")
 
-    def _find_device_root(self) -> str | None:
+    def _find_deviceroot(self) -> str | None:
         candidates = []
         try:
             for part in psutil.disk_partitions(all=False):
@@ -1240,10 +1240,10 @@ class MainWindow(QMainWindow):
         self._refresh_stats()
 
     def _update_storage_info(self):
-        if not self.device_root:
+        if not self.deviceroot:
             return
         try:
-            u = shutil.disk_usage(self.device_root)
+            u = shutil.disk_usage(self.deviceroot)
             self.storage_lbl.setText(
                 f"Storage: free {human_size(u.free)} / total {human_size(u.total)}"
             )
@@ -1251,13 +1251,13 @@ class MainWindow(QMainWindow):
             logging.exception("Storage info failed")
 
     def _album_root(self) -> str | None:
-        if not self.device_root:
+        if not self.deviceroot:
             return None
         for folder in ("ALBUM", "Album"):
-            p = os.path.join(self.device_root, folder)
+            p = os.path.join(self.deviceroot, folder)
             if os.path.isdir(p):
                 return p
-        p = os.path.join(self.device_root, "ALBUM")
+        p = os.path.join(self.deviceroot, "ALBUM")
         try:
             os.makedirs(p, exist_ok=True)
             return p
@@ -1283,12 +1283,12 @@ class MainWindow(QMainWindow):
             logging.exception("Album info failed")
 
     def _refresh_stats(self):
-        if not self.device_root:
+        if not self.deviceroot:
             return
         root = self._album_root()
         if not root:
             return
-        lines = [f"Device: {self.device_root}", f"Build: {__version__} / {__build_date__}", ""]
+        lines = [f"Device: {self.deviceroot}", f"Build: {__version__} / {__build_date__}", ""]
         try:
             for d in sorted(os.listdir(root)):
                 p = os.path.join(root, d)
@@ -1328,7 +1328,7 @@ class MainWindow(QMainWindow):
 
     def refresh_album_list(self):
         self._clear_layout(self.album_list_layout)
-        if not self.device_root:
+        if not self.deviceroot:
             self.album_list_layout.addWidget(lbl("No device detected"))
             self.album_list_layout.addStretch()
             return
@@ -1432,7 +1432,7 @@ class MainWindow(QMainWindow):
             self.refresh_album_view()
 
     def _on_drop_albums(self, paths: list):
-        if not self.device_root:
+        if not self.deviceroot:
             QMessageBox.warning(self, "No device", "No PhotoFrame detected.")
             return
         dest_base = self._album_root()
@@ -1638,9 +1638,9 @@ class MainWindow(QMainWindow):
             w.setEnabled(times_on)
 
     def save_prefs(self):
-        if not self.device_root:
+        if not self.deviceroot:
             return
-        prefs_file = os.path.join(self.device_root, ".prefs")
+        prefs_file = os.path.join(self.deviceroot, ".prefs")
         if not os.path.exists(prefs_file):
             QMessageBox.warning(self, "Prefs", ".prefs not found on device.")
             return
@@ -1718,9 +1718,9 @@ class MainWindow(QMainWindow):
 
     # ── RSS ───────────────────────────────────────────────────────────────────
     def _rss_config_path(self) -> str | None:
-        if not self.device_root:
+        if not self.deviceroot:
             return None
-        return os.path.join(self.device_root, ".config", "rss.cfg")
+        return os.path.join(self.deviceroot, ".config", "rss.cfg")
 
     def load_rss_sources(self):
         self.rss_feeds = []
@@ -1966,7 +1966,7 @@ class MainWindow(QMainWindow):
 
     # ── Backup / restore ──────────────────────────────────────────────────────
     def create_backup(self):
-        if not self.device_root:
+        if not self.deviceroot:
             QMessageBox.warning(self, "No device", "No PhotoFrame detected.")
             return
     
@@ -1995,7 +1995,7 @@ class MainWindow(QMainWindow):
         self._backup_progress.setCancelButton(None)
         self._backup_progress.show()
     
-        self._backup_thread = BackupThread(self.device_root, dest)
+        self._backup_thread = BackupThread(self.deviceroot, dest)
         self._backup_thread.done.connect(self._on_backup_done)
         self._backup_thread.error.connect(self._on_backup_error)
         self._backup_thread.finished.connect(self._cleanup_backup_thread)
@@ -2025,7 +2025,7 @@ class MainWindow(QMainWindow):
             self._backup_thread = None
 
     def restore_backup(self):
-        if not self.device_root:
+        if not self.deviceroot:
             QMessageBox.warning(self, "No device", "No PhotoFrame detected.")
             return
         src, _ = QFileDialog.getOpenFileName(
@@ -2040,7 +2040,7 @@ class MainWindow(QMainWindow):
         if reply != QMessageBox.StandardButton.Yes:
             return
         try:
-            shutil.unpack_archive(src, self.device_root)
+            shutil.unpack_archive(src, self.deviceroot)
             self.refresh_all()
             QMessageBox.information(self, "Restored", "Backup has been restored.")
         except Exception:
@@ -2048,7 +2048,7 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Restore error", "Backup could not be restored.")
 
     def import_album_folder(self):
-        if not self.device_root:
+        if not self.deviceroot:
             QMessageBox.warning(self, "No device", "No PhotoFrame detected.")
             return
         src = QFileDialog.getExistingDirectory(self, "Select album folder to import")
