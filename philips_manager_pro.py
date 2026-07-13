@@ -1589,26 +1589,48 @@ class MainWindow(QMainWindow):
     def load_prefs(self):
         if not self.deviceroot:
             return
-        path = os.path.join(self.deviceroot, ".prefs")
-        if not os.path.exists(path):
+    
+        prefs_file = os.path.join(self.deviceroot, ".prefs")
+        if not os.path.exists(prefs_file):
+            logging.warning(".prefs not found: %s", prefs_file)
             return
+    
         try:
-            with open(path, "r", encoding="utf-8", errors="replace") as fh:
+            with open(prefs_file, "r", encoding="utf-8", errors="replace") as fh:
                 raw = fh.read()
-            # FIX: Trunkiere nach dem schließenden Root-Tag, um "junk after document"-Fehler zu vermeiden
-            end = raw.rfind(">")
-            if end != -1:
-                raw = raw[:end + 1]
-            root = ET.fromstring(raw)
-            setup = root.find("setup")
-            if setup is not None:
-                for child in setup:
-                    self.prefs_set(child.tag, child.text or "")
-            logging.info("Prefs loaded from %s", path)
+    
+            start = raw.find("<?xml")
+            if start == -1:
+                start = raw.find("<plist")
+            if start == -1:
+                raise ET.ParseError("No XML start found in .prefs")
+    
+            end_tag = "</plist>"
+            end = raw.find(end_tag, start)
+            if end == -1:
+                raise ET.ParseError("No closing </plist> tag found in .prefs")
+    
+            raw_xml = raw[start:end + len(end_tag)].strip()
+            root = ET.fromstring(raw_xml)
+    
+            for setup in root.iter("setup"):
+                for key in self.prefs:
+                    node = setup.find(key)
+                    if node is not None and node.text is not None:
+                        self.prefs_set(key, node.text)
+    
+            logging.info(".prefs loaded")
+            self.update_auto_on_off_widgets()
+    
         except ET.ParseError as e:
-            logging.error("Prefs parse failed\n%s", e)
-        except Exception as e:
-            logging.exception("load_prefs error")
+            logging.exception("Prefs parse failed")
+            QMessageBox.warning(
+                self,
+                "Prefs error",
+                f".prefs is not valid XML or contains trailing data.\n\n{e}"
+            )
+        except Exception:
+            logging.exception("Prefs load failed")
 
     def _update_auto_on_off_widgets(self):
         """Enable/disable sensor and time widgets based on auto_on_off value."""
@@ -1809,68 +1831,55 @@ class MainWindow(QMainWindow):
                 ET.SubElement(link, "name").text = feed["name"]
                 ET.SubElement(link, "url").text = feed["url"]
     
-        backup_path = cfg + ".bak"
+        cfg_dir = os.path.dirname(cfg)
+        os.makedirs(cfg_dir, exist_ok=True)
+    
         if os.path.exists(cfg):
+            backup_path = cfg + ".bak"
             try:
                 shutil.copy2(cfg, backup_path)
-                logging.info("rss.cfg backup created: %s", backup_path)
+            except PermissionError:
+                logging.warning("RSS backup skipped: device is write-protected")
             except Exception:
                 logging.exception("RSS backup failed")
     
         try:
-            os.makedirs(os.path.dirname(cfg), exist_ok=True)
             ET.ElementTree(root).write(cfg, encoding="UTF-8", xml_declaration=True)
-            QMessageBox.information(self, "Saved", f"rss.cfg saved on device:\n{cfg}")
+            logging.info("RSS feeds saved: %s", cfg)
+            QMessageBox.information(self, "RSS", "rss.cfg saved on device.")
             return
-    
-        except (PermissionError, OSError) as e:
+        except PermissionError as e:
             logging.exception("RSS save failed on device")
             reply = QMessageBox.question(
                 self,
                 "RSS could not be saved on device",
-                f"The PhotoFrame did not allow writing rss.cfg.\n\n"
-                f"{type(e).__name__}: {e}\n\n"
+                "The PhotoFrame did not allow writing rss.cfg.\n\n"
+                f"{e}\n\n"
                 "Do you want to save rss.cfg on this computer instead?",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.Yes,
             )
             if reply != QMessageBox.StandardButton.Yes:
                 return
     
-            path, _ = QFileDialog.getSaveFileName(
+            target, _ = QFileDialog.getSaveFileName(
                 self,
                 "Save rss.cfg locally",
-                os.path.join(os.path.expanduser("~"), "rss.cfg"),
-                "RSS config (*.cfg);;XML files (*.xml);;All files (*.*)",
+                "rss.cfg",
+                "RSS config (*.cfg);;All files (*.*)"
             )
-            if not path:
+            if not target:
                 return
     
             try:
-                ET.ElementTree(root).write(path, encoding="UTF-8", xml_declaration=True)
-                QMessageBox.information(
-                    self,
-                    "Saved locally",
-                    f"rss.cfg was saved on this computer:\n{path}"
-                )
-                return
-            except Exception as e2:
+                ET.ElementTree(root).write(target, encoding="UTF-8", xml_declaration=True)
+                logging.info("RSS feeds saved locally: %s", target)
+                QMessageBox.information(self, "RSS", "rss.cfg was saved locally.")
+            except Exception:
                 logging.exception("Local RSS save failed")
-                QMessageBox.critical(
-                    self,
-                    "RSS error",
-                    f"rss.cfg could not be saved on this computer either.\n\n"
-                    f"{type(e2).__name__}: {e2}"
-                )
-                return
-    
-        except Exception as e:
+                QMessageBox.critical(self, "RSS", "rss.cfg could not be saved locally.")
+        except Exception:
             logging.exception("RSS save failed")
-            QMessageBox.critical(
-                self,
-                "RSS error",
-                f"RSS could not be saved.\n\n{type(e).__name__}: {e}"
-            )
+            QMessageBox.critical(self, "RSS", "rss.cfg could not be saved.")
 
     def open_rss_feed(self, index: int):
         if index < 0 or index >= len(self.rss_feeds):
