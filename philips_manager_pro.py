@@ -1645,7 +1645,7 @@ class MainWindow(QMainWindow):
                 self._prefs_set("twentyfour", clock_node.text)
     
             logging.info(".prefs loaded")
-            self.update_auto_on_off_widgets()
+            self._update_auto_on_off_widgets()
     
         except ET.ParseError as e:
             logging.exception("Prefs parse failed")
