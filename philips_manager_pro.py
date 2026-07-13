@@ -47,7 +47,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QGridLayout, QFormLayout,
     QLabel, QPushButton, QSlider, QComboBox, QLineEdit,
     QTextEdit, QSizePolicy, QMessageBox, QInputDialog,
-    QFileDialog, QTimeEdit, QDialog,
+    QFileDialog, QTimeEdit, QDialog, QProgressDialog,
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -439,6 +439,24 @@ class RssFetchThread(QThread):
         else:
             self.error.emit(f"Could not load: {self.url}")
 
+class BackupThread(QThread):
+    done = Signal(str)
+    error = Signal(str)
+
+    def __init__(self, source_dir: str, dest_zip: str):
+        super().__init__()
+        self.source_dir = source_dir
+        self.dest_zip = dest_zip
+
+    def run(self):
+        try:
+            base = os.path.splitext(self.dest_zip)[0]
+            created = shutil.make_archive(base, "zip", self.source_dir)
+            self.done.emit(created)
+        except Exception as e:
+            logging.exception("Backup failed")
+            self.error.emit(str(e))
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Main window
 # ─────────────────────────────────────────────────────────────────────────────
@@ -475,6 +493,8 @@ class MainWindow(QMainWindow):
         self.brightness_val_lbl: QLabel  | None = None
 
         self._rss_thread: RssFetchThread | None = None
+        self._backup_thread: BackupThread | None = None
+        self._backup_progress: QProgressDialog | None = None
 
         self._build_ui()
         self._apply_global_style()
@@ -1830,17 +1850,60 @@ class MainWindow(QMainWindow):
         if not self.device_root:
             QMessageBox.warning(self, "No device", "No PhotoFrame detected.")
             return
+    
         dest, _ = QFileDialog.getSaveFileName(
             self, "Save backup ZIP", "philips_backup.zip", "ZIP archive (*.zip)"
         )
-        if not dest: return
-        try:
-            base = os.path.splitext(dest)[0]
-            shutil.make_archive(base, "zip", self.device_root)
-            QMessageBox.information(self, "Backup", f"Backup created:\n{dest}")
-        except Exception:
-            logging.exception("Backup failed")
-            QMessageBox.critical(self, "Backup error", "Backup could not be created.")
+        if not dest:
+            return
+    
+        if self._backup_thread and self._backup_thread.isRunning():
+            QMessageBox.information(self, "Backup", "A backup is already running.")
+            return
+    
+        self._backup_progress = QProgressDialog(
+            "Creating backup ZIP...\nPlease wait.",
+            None,
+            0,
+            0,
+            self,
+        )
+        self._backup_progress.setWindowTitle("Creating backup")
+        self._backup_progress.setWindowModality(Qt.WindowModality.ApplicationModal)
+        self._backup_progress.setMinimumDuration(0)
+        self._backup_progress.setAutoClose(False)
+        self._backup_progress.setAutoReset(False)
+        self._backup_progress.setCancelButton(None)
+        self._backup_progress.show()
+    
+        self._backup_thread = BackupThread(self.device_root, dest)
+        self._backup_thread.done.connect(self._on_backup_done)
+        self._backup_thread.error.connect(self._on_backup_error)
+        self._backup_thread.finished.connect(self._cleanup_backup_thread)
+        self._backup_thread.start()
+
+    def _on_backup_done(self, created_path: str):
+        if self._backup_progress:
+            self._backup_progress.close()
+            self._backup_progress = None
+    
+        QMessageBox.information(self, "Backup", f"Backup created:\n{created_path}")
+    
+    def _on_backup_error(self, error_message: str):
+        if self._backup_progress:
+            self._backup_progress.close()
+            self._backup_progress = None
+    
+        QMessageBox.critical(
+            self,
+            "Backup error",
+            f"Backup could not be created.\n\n{error_message}"
+        )
+    
+    def _cleanup_backup_thread(self):
+        if self._backup_thread:
+            self._backup_thread.deleteLater()
+            self._backup_thread = None
 
     def restore_backup(self):
         if not self.device_root:
