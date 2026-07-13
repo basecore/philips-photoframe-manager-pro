@@ -262,12 +262,44 @@ def qtime_to_minutes(t: QTime) -> int:
 
 def btn(label: str, color: str = "", min_w: int = 0) -> QPushButton:
     b = QPushButton(label)
-    style = "QPushButton { padding: 6px 14px; border-radius: 6px; font-size: 13px;"
-    if color:
-        style += f" background: {color}; color: white;"
-    else:
-        style += f" background: {BLUE}; color: white;"
-    style += "} QPushButton:hover { filter: brightness(1.1); }"
+
+    base_color = color or BLUE
+
+    style = f"""
+    QPushButton {{
+        padding: 6px 14px;
+        border-radius: 6px;
+        font-size: 13px;
+        background: {base_color};
+        color: white;
+        border: none;
+    }}
+    QPushButton:hover {{
+        background: #0A58CA;
+    }}
+    QPushButton:pressed {{
+        background: #084298;
+    }}
+    """
+
+    if color == RED:
+        style = f"""
+        QPushButton {{
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 13px;
+            background: {RED};
+            color: white;
+            border: none;
+        }}
+        QPushButton:hover {{
+            background: #A93226;
+        }}
+        QPushButton:pressed {{
+            background: #922B21;
+        }}
+        """
+
     b.setStyleSheet(style)
     if min_w:
         b.setMinimumWidth(min_w)
@@ -1555,22 +1587,41 @@ class MainWindow(QMainWindow):
 
     # ── Prefs load / save ─────────────────────────────────────────────────────
     def load_prefs(self):
-        if not self.device_root:
+        if not self.deviceroot:
             return
-        prefs_file = os.path.join(self.device_root, ".prefs")
+    
+        prefs_file = os.path.join(self.deviceroot, ".prefs")
         if not os.path.exists(prefs_file):
             logging.warning(".prefs not found: %s", prefs_file)
             return
+    
         try:
-            tree = ET.parse(prefs_file)
-            root = tree.getroot()
+            with open(prefs_file, "r", encoding="utf-8", errors="replace") as fh:
+                raw = fh.read()
+    
+            end_tag = "</plist>"
+            end_pos = raw.find(end_tag)
+            if end_pos != -1:
+                raw = raw[:end_pos + len(end_tag)]
+    
+            root = ET.fromstring(raw)
+    
             for setup in root.iter("setup"):
-                for key in self._prefs:
+                for key in self.prefs:
                     node = setup.find(key)
                     if node is not None and node.text is not None:
-                        self._prefs_set(key, node.text)
+                        self.prefs_set(key, node.text)
+    
             logging.info(".prefs loaded")
-            self._update_auto_on_off_widgets()
+            self.update_auto_on_off_widgets()
+    
+        except ET.ParseError as e:
+            logging.exception("Prefs parse failed")
+            QMessageBox.warning(
+                self,
+                "Prefs error",
+                f".prefs is not valid XML or contains trailing data.\n\n{e}"
+            )
         except Exception:
             logging.exception("Prefs load failed")
 
