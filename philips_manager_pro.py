@@ -1807,8 +1807,9 @@ class MainWindow(QMainWindow):
             self.rss_selected_index = None
 
     def save_rss_feeds(self):
-        cfg = self._rss_config_path()
+        cfg = self.rss_config_path()
         if not cfg:
+            QMessageBox.warning(self, "RSS", "No device connected.")
             return
     
         root = ET.Element("list")
@@ -1836,12 +1837,14 @@ class MainWindow(QMainWindow):
             ET.ElementTree(root).write(cfg, encoding="UTF-8", xml_declaration=True)
             QMessageBox.information(self, "Saved", f"rss.cfg saved on device:\n{cfg}")
             return
-        except PermissionError as e:
-            logging.exception("RSS save failed on device due to permissions")
+    
+        except (PermissionError, OSError) as e:
+            logging.exception("RSS save failed on device")
             reply = QMessageBox.question(
                 self,
                 "RSS could not be saved on device",
-                "The PhotoFrame did not allow writing rss.cfg.\n\n"
+                f"The PhotoFrame did not allow writing rss.cfg.\n\n"
+                f"{type(e).__name__}: {e}\n\n"
                 "Do you want to save rss.cfg on this computer instead?",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.Yes,
@@ -1865,16 +1868,24 @@ class MainWindow(QMainWindow):
                     "Saved locally",
                     f"rss.cfg was saved on this computer:\n{path}"
                 )
-            except Exception:
+                return
+            except Exception as e2:
                 logging.exception("Local RSS save failed")
                 QMessageBox.critical(
                     self,
                     "RSS error",
-                    "rss.cfg could not be saved on this computer either."
+                    f"rss.cfg could not be saved on this computer either.\n\n"
+                    f"{type(e2).__name__}: {e2}"
                 )
-        except Exception:
+                return
+    
+        except Exception as e:
             logging.exception("RSS save failed")
-            QMessageBox.critical(self, "RSS error", "RSS could not be saved.")
+            QMessageBox.critical(
+                self,
+                "RSS error",
+                f"RSS could not be saved.\n\n{type(e).__name__}: {e}"
+            )
 
     def open_rss_feed(self, index: int):
         if index < 0 or index >= len(self.rss_feeds):
