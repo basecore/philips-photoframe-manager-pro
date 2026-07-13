@@ -1595,39 +1595,54 @@ class MainWindow(QMainWindow):
             logging.warning(".prefs not found: %s", prefs_file)
             return
     
+        tag_map = {
+            "language_code": "languagecode",
+            "brightness": "brightness",
+            "twentyfour": "twentyfour",
+            "format": "format",
+            "timing": "timing",
+            "sequence": "sequence",
+            "effect": "effect",
+            "collage": "collage",
+            "calendar": "calendar",
+            "open_at_startup": "openatstartup",
+            "auto_on_off": "autoonoff",
+            "sensor_on": "sensoron",
+            "sensor_off": "sensoroff",
+            "time_on": "timeon",
+            "time_off": "timeoff",
+            "auto_tilt": "autotilt",
+            "background_color": "backgroundcolor",
+            "delete_enabled": "deleteenabled",
+            "beep": "beep",
+            "demo_mode": "demomode",
+        }
+    
         try:
             with open(prefs_file, "r", encoding="utf-8", errors="replace") as fh:
-                raw = fh.read()
+                raw = fh.read().strip()
     
-            logging.info("DEBUG .prefs length: %d", len(raw))
+            if raw.endswith(">>"):
+                raw = raw[:-1]
     
-            xml_to_parse = None
+            root = ET.fromstring(raw)
     
-            m = re.search(r'(<plist.*?</plist>)', raw, re.IGNORECASE | re.DOTALL)
-            if m:
-                xml_to_parse = m.group(1)
+            setup = root.find(".//setup")
+            if setup is None:
+                raise ET.ParseError("No <setup> block found in .prefs")
     
-            if xml_to_parse is None:
-                m = re.search(r'(<setup>.*?</setup>)', raw, re.IGNORECASE | re.DOTALL)
-                if m:
-                    xml_to_parse = "<plist>" + m.group(1) + "</plist>"
+            for child in setup:
+                internal_key = tag_map.get(child.tag)
+                if internal_key and child.text is not None:
+                    self.prefs_set(internal_key, child.text)
     
-            if xml_to_parse is None:
-                logging.warning("No usable XML block found in .prefs")
-                QMessageBox.warning(
-                    self,
-                    "Prefs error",
-                    ".prefs could not be parsed. Default values will be used."
-                )
-                return
+            demo_node = root.find(".//demo_mode")
+            if demo_node is not None and demo_node.text is not None:
+                self.prefs_set("demomode", demo_node.text)
     
-            root = ET.fromstring(xml_to_parse)
-    
-            for setup in root.iter("setup"):
-                for key in self.prefs:
-                    node = setup.find(key)
-                    if node is not None and node.text is not None:
-                        self.prefs_set(key, node.text)
+            clock_node = root.find(".//clock/twentyfour")
+            if clock_node is not None and clock_node.text is not None:
+                self.prefs_set("twentyfour", clock_node.text)
     
             logging.info(".prefs loaded")
             self.update_auto_on_off_widgets()
@@ -1637,11 +1652,11 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(
                 self,
                 "Prefs error",
-                f".prefs is not valid XML or contains trailing data.\n\n{e}"
+                f".prefs is not valid XML.\n\n{e}"
             )
         except Exception:
             logging.exception("Prefs load failed")
-
+        
     def _update_auto_on_off_widgets(self):
         """Enable/disable sensor and time widgets based on auto_on_off value."""
         raw = combo_get_raw("auto_on_off", self.cb_auto_on_off)
