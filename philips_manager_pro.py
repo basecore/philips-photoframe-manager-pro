@@ -1634,15 +1634,15 @@ class MainWindow(QMainWindow):
             for child in setup:
                 internal_key = tag_map.get(child.tag)
                 if internal_key and child.text is not None:
-                    self.prefs_set(internal_key, child.text)
+                    self._prefs_set(internal_key, child.text)
     
             demo_node = root.find(".//demo_mode")
             if demo_node is not None and demo_node.text is not None:
-                self.prefs_set("demomode", demo_node.text)
+                self._prefs_set("demomode", demo_node.text)
     
             clock_node = root.find(".//clock/twentyfour")
             if clock_node is not None and clock_node.text is not None:
-                self.prefs_set("twentyfour", clock_node.text)
+                self._prefs_set("twentyfour", clock_node.text)
     
             logging.info(".prefs loaded")
             self.update_auto_on_off_widgets()
