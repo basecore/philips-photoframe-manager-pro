@@ -1599,19 +1599,26 @@ class MainWindow(QMainWindow):
             with open(prefs_file, "r", encoding="utf-8", errors="replace") as fh:
                 raw = fh.read()
     
-            start = raw.find("<?xml")
-            if start == -1:
-                start = raw.find("<plist")
-            if start == -1:
-                raise ET.ParseError("No XML start found in .prefs")
+            xml_to_parse = None
     
-            end_tag = "</plist>"
-            end = raw.find(end_tag, start)
-            if end == -1:
-                raise ET.ParseError("No closing </plist> tag found in .prefs")
+            # 1) Erst normales plist versuchen
+            start_plist = raw.find("<plist")
+            end_plist = raw.find("</plist>")
+            if start_plist != -1 and end_plist != -1 and end_plist > start_plist:
+                xml_to_parse = raw[start_plist:end_plist + len("</plist>")]
     
-            raw_xml = raw[start:end + len(end_tag)].strip()
-            root = ET.fromstring(raw_xml)
+            # 2) Falls kein vollständiges plist vorhanden ist: nur <setup>...</setup> nehmen
+            if xml_to_parse is None:
+                start_setup = raw.find("<setup>")
+                end_setup = raw.find("</setup>")
+                if start_setup != -1 and end_setup != -1 and end_setup > start_setup:
+                    setup_xml = raw[start_setup:end_setup + len("</setup>")]
+                    xml_to_parse = f"<plist>{setup_xml}</plist>"
+    
+            if xml_to_parse is None:
+                raise ET.ParseError("No usable <setup> or <plist> XML block found in .prefs")
+    
+            root = ET.fromstring(xml_to_parse)
     
             for setup in root.iter("setup"):
                 for key in self.prefs:
