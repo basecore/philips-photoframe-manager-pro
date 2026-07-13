@@ -228,15 +228,30 @@ def dir_stats(path: str):
                 pass
     return files, dirs, size
 
-def pil_to_qpixmap(img: Image.Image, max_w: int = 0, max_h: int = 0) -> QPixmap:
+def pil_to_qpixmap(img: Image.Image, max_w: int = 0, max_h: int = 0, pad: bool = False) -> QPixmap:
     if max_w > 0 or max_h > 0:
         img = img.copy()
-        img.thumbnail((max_w or 99999, max_h or 99999))
+
+        target_w = max_w or img.width
+        target_h = max_h or img.height
+
+        img.thumbnail((target_w, target_h), Image.Resampling.LANCZOS)
+
+        if pad:
+            if img.mode != "RGBA":
+                img = img.convert("RGBA")
+            canvas = Image.new("RGBA", (target_w, target_h), (255, 255, 255, 0))
+            x = (target_w - img.width) // 2
+            y = (target_h - img.height) // 2
+            canvas.paste(img, (x, y))
+            img = canvas
+
     if img.mode not in ("RGB", "RGBA"):
         img = img.convert("RGBA")
+
     data = img.tobytes("raw", img.mode)
-    fmt  = QImage.Format.Format_RGBA8888 if img.mode == "RGBA" else QImage.Format.Format_RGB888
-    qi   = QImage(data, img.width, img.height, fmt)
+    fmt = QImage.Format.Format_RGBA8888 if img.mode == "RGBA" else QImage.Format.Format_RGB888
+    qi = QImage(data, img.width, img.height, fmt)
     return QPixmap.fromImage(qi)
 
 def minutes_to_qtime(minutes: int) -> QTime:
@@ -365,7 +380,7 @@ class ImageCard(QFrame):
         try:
             img = Image.open(path)
             img = ImageOps.exif_transpose(img)
-            img_lbl.setPixmap(pil_to_qpixmap(img, thumb_size, thumb_size))
+            img_lbl.setPixmap(pil_to_qpixmap(img, thumb_size, thumb_size, pad=True))
         except Exception:
             img_lbl.setText("Error")
         v.addWidget(img_lbl)
@@ -1742,7 +1757,21 @@ class MainWindow(QMainWindow):
 
     def save_rss_feeds(self):
         cfg = self._rss_config_path()
-        if not cfg: return
+        if not cfg:
+            return
+    
+        root = ET.Element("list")
+        groups = {}
+        for feed in self.rss_feeds:
+            groups.setdefault(feed["group"], []).append(feed)
+    
+        for gname, feeds in groups.items():
+            g = ET.SubElement(root, "group", {"name": gname})
+            for feed in feeds:
+                link = ET.SubElement(g, "link")
+                ET.SubElement(link, "name").text = feed["name"]
+                ET.SubElement(link, "url").text = feed["url"]
+    
         backup_path = cfg + ".bak"
         if os.path.exists(cfg):
             try:
@@ -1750,20 +1779,48 @@ class MainWindow(QMainWindow):
                 logging.info("rss.cfg backup created: %s", backup_path)
             except Exception:
                 logging.exception("RSS backup failed")
+    
         try:
             os.makedirs(os.path.dirname(cfg), exist_ok=True)
-            root   = ET.Element("list")
-            groups = {}
-            for feed in self.rss_feeds:
-                groups.setdefault(feed["group"], []).append(feed)
-            for gname, feeds in groups.items():
-                g = ET.SubElement(root, "group", {"name": gname})
-                for feed in feeds:
-                    link = ET.SubElement(g, "link")
-                    ET.SubElement(link, "name").text = feed["name"]
-                    ET.SubElement(link, "url").text  = feed["url"]
             ET.ElementTree(root).write(cfg, encoding="UTF-8", xml_declaration=True)
-            QMessageBox.information(self, "Saved", "rss.cfg saved.")
+            QMessageBox.information(self, "Saved", f"rss.cfg saved on device:\n{cfg}")
+            return
+        except PermissionError as e:
+            logging.exception("RSS save failed on device due to permissions")
+            reply = QMessageBox.question(
+                self,
+                "RSS could not be saved on device",
+                "The PhotoFrame did not allow writing rss.cfg.\n\n"
+                "Do you want to save rss.cfg on this computer instead?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes,
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+    
+            path, _ = QFileDialog.getSaveFileName(
+                self,
+                "Save rss.cfg locally",
+                os.path.join(os.path.expanduser("~"), "rss.cfg"),
+                "RSS config (*.cfg);;XML files (*.xml);;All files (*.*)",
+            )
+            if not path:
+                return
+    
+            try:
+                ET.ElementTree(root).write(path, encoding="UTF-8", xml_declaration=True)
+                QMessageBox.information(
+                    self,
+                    "Saved locally",
+                    f"rss.cfg was saved on this computer:\n{path}"
+                )
+            except Exception:
+                logging.exception("Local RSS save failed")
+                QMessageBox.critical(
+                    self,
+                    "RSS error",
+                    "rss.cfg could not be saved on this computer either."
+                )
         except Exception:
             logging.exception("RSS save failed")
             QMessageBox.critical(self, "RSS error", "RSS could not be saved.")
